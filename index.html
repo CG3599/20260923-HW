@@ -6,16 +6,15 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="topbar"><div><div class="eyebrow">AIoT-DA HW1</div><h1>全台氣象資訊</h1><p>資料來源：中央氣象署開放資料平台</p></div><div class="actions"><button id="settingsBtn" class="secondary">API 設定</button><button id="refreshBtn" class="primary">重新取得資料</button></div></header>
+<header class="topbar"><div><div class="eyebrow">AIoT-DA HW1</div><h1>全台氣象資訊</h1><p>資料來源：中央氣象署開放資料平台</p></div><div class="actions"><button id="refreshBtn" class="primary">重新取得資料</button></div></header>
 <main>
-<section class="status-card"><div><strong id="statusTitle">尚未取得氣象資料</strong><p id="statusText">請先設定中央氣象署 API 授權碼。</p></div><div class="updated"><span>最後更新</span><strong id="updatedAt">--</strong></div></section>
+<section class="status-card"><div><strong id="statusTitle">尚未取得氣象資料</strong><p id="statusText">正在連線至中央氣象署取得資料。</p></div><div class="updated"><span>最後更新</span><strong id="updatedAt">--</strong></div></section>
 <section class="summary-grid">
 <div class="summary-card"><span>縣市</span><strong id="cityCount">--</strong></div><div class="summary-card"><span>平均溫度</span><strong id="avgTemp">--</strong></div><div class="summary-card"><span>平均濕度</span><strong id="avgHumidity">--</strong></div><div class="summary-card"><span>資料筆數</span><strong id="recordCount">--</strong></div>
 </section>
 <section><div class="section-head"><div><div class="eyebrow">WEATHER DATA</div><h2>全台縣市天氣</h2></div><input id="searchInput" type="search" placeholder="搜尋縣市…"></div><div id="weatherGrid" class="weather-grid"></div></section>
-<section class="source-card"><h2>資料說明</h2><p>本頁採用中央氣象署「鄉鎮天氣預報－全臺灣各鄉鎮市區預報資料」API，讀取溫度、相對濕度、降雨機率、風向與風速等欄位。</p><p class="muted">API Key 僅儲存在目前瀏覽器的 localStorage，不會寫入 GitHub。</p></section>
+<section class="source-card"><h2>資料說明</h2><p>本頁採用中央氣象署「鄉鎮天氣預報－全臺灣各鄉鎮市區預報資料」API，讀取溫度、相對濕度、降雨機率、風向與風速等欄位。</p><p class="muted">API 授權碼由 Vercel Environment Variables 安全管理，不會儲存在瀏覽器或 GitHub。</p></section>
 </main>
-<div id="settingsModal" class="modal hidden"><div class="modal-panel"><button id="closeModalBtn" class="close" aria-label="關閉">×</button><div class="eyebrow">CWA API</div><h2>設定中央氣象署 API 授權碼</h2><p>輸入你已申請的 CWA OpenData Authorization。</p><label for="apiKeyInput">Authorization</label><input id="apiKeyInput" type="password" autocomplete="off" placeholder="CWA-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"><div class="modal-actions"><button id="clearKeyBtn" class="secondary">清除</button><button id="saveKeyBtn" class="primary">儲存並取得資料</button></div><p id="modalMessage" class="error"></p></div></div>
 <template id="weatherTemplate"><article class="weather-card"><div class="card-top"><div><h3 class="city"></h3><p class="town"></p></div><span class="weather-icon"></span></div><div class="temperature"><span class="temp"></span><small>°C</small></div><div class="weather-name"></div><div class="details"><div><span>💧 濕度</span><strong class="humidity"></strong></div><div><span>🌧️ 降雨機率</span><strong class="pop"></strong></div><div><span>💨 風向</span><strong class="wind-direction"></strong></div><div><span>💨 風速</span><strong class="wind-speed"></strong></div></div><div class="forecast-time"></div></article></template>
 <footer><span>2026 AIoT-DA HW1</span><a href="https://opendata.cwa.gov.tw/" target="_blank" rel="noopener noreferrer">中央氣象署開放資料平台 ↗</a></footer>
 <script src="script.js"></script>
