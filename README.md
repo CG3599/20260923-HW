@@ -10,8 +10,6 @@
 
 ## 資料來源
 中央氣象署「鄉鎮天氣預報－全臺灣各鄉鎮市區預報資料」
-- Dataset：F-D0047-093
-- API：https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093
 
 ## 下一階段
 再加入 SQLite、資料正確性驗證、GIS 地圖與 Vercel 部署最佳化。
