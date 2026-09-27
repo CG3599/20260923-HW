@@ -1,5 +1,5 @@
 const API_URL="/api/weather";
-const state={rows:[],selectedCity:"",selectedTown:"",defaultCities:[]};
+const state={rows:[],selectedCity:"",selectedTown:"",defaultCities:[],suggestionItems:[],suggestionIndex:-1};
 const DEFAULT_KEY="weatherDefaultCities";
 const $=s=>document.querySelector(s);
 
@@ -41,6 +41,7 @@ function normalizeSearchText(value=""){
 }
 function renderSuggestions(){
   const box=$("#suggestions"),q=normalizeSearchText($("#searchInput").value);
+  state.suggestionItems=[];state.suggestionIndex=-1;
   if(!q){box.classList.add("hidden");$("#townSelectWrap").classList.add("hidden");return}
 
   const cityMatches=cities().filter(city=>normalizeSearchText(city).includes(q));
@@ -69,19 +70,51 @@ function renderSuggestions(){
   // 同名鄉鎮可能存在於不同縣市，因此保留每一筆，讓使用者能直接選到正確資料。
   townMatches.forEach(r=>items.push({type:"town",city:r.city,town:r.town,name:r.town,label:"鄉鎮"}));
 
+  state.suggestionItems=items;
   box.innerHTML="";
-  items.slice(0,16).forEach(m=>{
+  items.slice(0,10).forEach((m,i)=>{
     const b=document.createElement("button");
-    b.type="button";b.className="suggestion";
+    b.type="button";b.className="suggestion";b.dataset.index=i;
     b.innerHTML="<span>"+m.name+"</span><small>"+m.label+(m.type==="town"?"｜"+m.city:"")+"</small>";
     b.addEventListener("click",()=>selectSearch(m));
+    b.addEventListener("mouseenter",()=>setSuggestionIndex(i));
     box.appendChild(b);
   });
   box.classList.toggle("hidden",!items.length);
   $("#townSelectWrap").classList.add("hidden");
 }
+function setSuggestionIndex(index){
+  const visibleCount=Math.min(state.suggestionItems.length,10);
+  if(!visibleCount)return;
+  state.suggestionIndex=Math.max(0,Math.min(index,visibleCount-1));
+  document.querySelectorAll("#suggestions .suggestion").forEach((el,i)=>el.classList.toggle("active",i===state.suggestionIndex));
+  const active=document.querySelector("#suggestions .suggestion.active");
+  if(active)active.scrollIntoView({block:"nearest"});
+}
+function handleSearchKeydown(e){
+  const box=$("#suggestions");
+  if(box.classList.contains("hidden")){
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+      const q=normalizeSearchText($("#searchInput").value);
+      if(q){renderSuggestions();e.preventDefault();}
+    }
+    return;
+  }
+  const count=Math.min(state.suggestionItems.length,10);
+  if(!count)return;
+  if(e.key==="ArrowDown"){
+    e.preventDefault();setSuggestionIndex(state.suggestionIndex<0?0:state.suggestionIndex+1);
+  }else if(e.key==="ArrowUp"){
+    e.preventDefault();setSuggestionIndex(state.suggestionIndex<0?count-1:state.suggestionIndex-1);
+  }else if(e.key==="Enter"){
+    if(state.suggestionIndex>=0){e.preventDefault();selectSearch(state.suggestionItems[state.suggestionIndex]);}
+  }else if(e.key==="Escape"){
+    e.preventDefault();box.classList.add("hidden");state.suggestionIndex=-1;
+  }
+}
 function selectSearch(m){
   $("#suggestions").classList.add("hidden");
+  state.suggestionIndex=-1;
   state.selectedCity=m.city;
   state.selectedTown=m.town||"";
   $("#searchInput").value=m.type==="town"?m.town:m.city;
@@ -136,7 +169,7 @@ function renderDefaultCards(){
   $("#searchHint").textContent="勾選「預設」即可讓該縣市在下次開啟網頁時自動出現；最多 9 個。";
 }
 function clearSearch(){
-  state.selectedCity="";state.selectedTown="";$("#searchInput").value="";$("#townSelect").innerHTML='<option value="">請先選擇縣市</option>';$("#townSelectWrap").classList.add("hidden");$("#suggestions").classList.add("hidden");renderDefaultCards();
+  state.selectedCity="";state.suggestionItems=[];state.suggestionIndex=-1;state.selectedTown="";$("#searchInput").value="";$("#townSelect").innerHTML='<option value="">請先選擇縣市</option>';$("#townSelectWrap").classList.add("hidden");$("#suggestions").classList.add("hidden");renderDefaultCards();
 }
 function summary(){
   const ts=state.rows.map(r=>r.temperature).filter(Number.isFinite),hs=state.rows.map(r=>r.humidity).filter(Number.isFinite);
@@ -160,6 +193,7 @@ async function loadWeather(){
 }
 $("#refreshBtn").addEventListener("click",loadWeather);
 $("#searchInput").addEventListener("input",renderSuggestions);
+$("#searchInput").addEventListener("keydown",handleSearchKeydown);
 $("#townSelect").addEventListener("change",e=>{if(!state.selectedCity)return;if(e.target.value)renderTownResult(state.selectedCity,e.target.value);else renderCityCards(state.selectedCity)});
 $("#clearSearchBtn").addEventListener("click",clearSearch);
 document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
