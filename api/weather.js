@@ -8,11 +8,8 @@ export default async function handler(req, res) {
     });
   }
 
-  const url = new URL(
-    "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093"
-  );
-
-  // 093 為全臺鄉鎮資料；指定 20 個縣市資料區域，避免 API 對無條件查詢回傳 Resource not found。
+  // F-D0047-093 為「全臺灣各鄉鎮市區預報」，
+  // 每一個 locationId 代表一個縣市的全部鄉鎮。
   const locationIds = [
     "F-D0047-001", "F-D0047-005", "F-D0047-009", "F-D0047-013",
     "F-D0047-017", "F-D0047-021", "F-D0047-025", "F-D0047-029",
@@ -22,42 +19,69 @@ export default async function handler(req, res) {
     "F-D0047-081", "F-D0047-085"
   ];
 
-  url.searchParams.set("locationId", locationIds.join(","));
-  url.searchParams.set("Authorization", key);
-  url.searchParams.set("format", "JSON");
+  // CWA 對跨縣市查詢的回傳數量可能受到限制，
+  // 因此分批查詢，最後在後端合併成一份資料。
+  const batchSize = 5;
+  const batches = [];
+  for (let i = 0; i < locationIds.length; i += batchSize) {
+    batches.push(locationIds.slice(i, i + batchSize));
+  }
 
   try {
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        Accept: "application/json"
+    const results = await Promise.all(
+      batches.map(async (batch) => {
+        const url = new URL(
+          "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093"
+        );
+
+        url.searchParams.set("locationId", batch.join(","));
+        url.searchParams.set("Authorization", key);
+        url.searchParams.set("format", "JSON");
+
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          headers: { Accept: "application/json" }
+        });
+
+        const text = await response.text();
+        let body = null;
+        try {
+          body = JSON.parse(text);
+        } catch (_) {}
+
+        if (!response.ok) {
+          throw new Error(
+            body?.message ||
+            body?.result?.message ||
+            `CWA API HTTP ${response.status}`
+          );
+        }
+
+        if (!body?.records?.Locations) {
+          throw new Error("CWA API 回傳內容缺少 Locations");
+        }
+
+        return body.records.Locations;
+      })
+    );
+
+    const locations = results.flat();
+
+    return res.status(200).json({
+      success: true,
+      records: {
+        Locations: locations
+      },
+      meta: {
+        source: "CWA F-D0047-093",
+        cityCount: locations.length,
+        requestedCityCount: locationIds.length
       }
-    });
-
-    const text = await response.text();
-
-    let body = null;
-    try {
-      body = JSON.parse(text);
-    } catch (_) {}
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        success: false,
-        message: body?.message || body?.result?.message || `CWA API HTTP ${response.status}`,
-        cwaStatus: response.status,
-        cwaResponse: body || text
-      });
-    }
-
-    return res.status(200).json(body ?? {
-      success: false,
-      message: "CWA API 回傳內容不是有效 JSON"
     });
   } catch (error) {
     return res.status(502).json({
       success: false,
-      message: "無法連線至中央氣象署 API",
+      message: "無法完整取得中央氣象署全台鄉鎮資料",
       error: String(error)
     });
   }
