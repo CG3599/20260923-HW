@@ -8,14 +8,23 @@ export default async function handler(req, res) {
     });
   }
 
-  const url = new URL("https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093");
-  url.searchParams.set("Authorization", key);
+  const url = new URL(
+    "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093"
+  );
   url.searchParams.set("format", "JSON");
 
   try {
-    const response = await fetch(url.toString());
+    // CWA 官方 REST API 文件使用 Authorization HTTP Header 傳送授權碼。
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: key,
+        Accept: "application/json"
+      }
+    });
 
     const text = await response.text();
+
     res.status(response.status);
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     return res.send(text);
