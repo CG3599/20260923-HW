@@ -67,7 +67,7 @@ function renderRows(rows,showAll=false){
   const t=$("#weatherTemplate");
   rows.forEach(r=>{
     const n=t.content.cloneNode(true),check=n.querySelector(".default-check");
-    n.querySelector(".city").textContent=r.city;n.querySelector(".town").textContent=r.town;
+    n.querySelector(".city").textContent=r.town;n.querySelector(".town").textContent=r.city;
     n.querySelector(".weather-icon").textContent=icon(r.weather);n.querySelector(".temp").textContent=fmt(r.temperature);
     n.querySelector(".weather-name").textContent=r.weather;n.querySelector(".humidity").textContent=fmt(r.humidity,"%");n.querySelector(".pop").textContent=fmt(r.pop,"%");
     n.querySelector(".wind-direction").textContent=windArrow(r.windDirection)+" "+(r.windDirection||"--");n.querySelector(".wind-speed").textContent=fmt(r.windSpeed," m/s");
