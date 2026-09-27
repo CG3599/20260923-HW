@@ -1,84 +1,118 @@
 const API_URL="/api/weather";
-const state={rows:[]};
+const state={rows:[],selectedCity:"",selectedTown:"",defaultCities:[]};
+const DEFAULT_KEY="weatherDefaultCities";
 const $=s=>document.querySelector(s);
 
 function icon(t=""){if(t.includes("雷"))return"⛈️";if(t.includes("雨"))return"🌧️";if(t.includes("雪"))return"❄️";if(t.includes("霧"))return"🌫️";if(t.includes("晴時多雲"))return"🌤️";if(t.includes("晴"))return"☀️";if(t.includes("多雲"))return"⛅";if(t.includes("陰"))return"☁️";return"🌈"}
 function num(v){if(v==null||v===""||v==="--"||v==="無資料")return null;const n=Number(v);return Number.isFinite(n)?n:null}
-function windArrow(direction=""){const d=String(direction);if(d.includes("北北東")||d.includes("東北"))return"↗️";if(d.includes("東"))return"➡️";if(d.includes("東南")||d.includes("南東"))return"↘️";if(d.includes("南"))return"⬇️";if(d.includes("南西")||d.includes("西南"))return"↙️";if(d.includes("西"))return"⬅️";if(d.includes("西北")||d.includes("北西"))return"↖️";if(d.includes("北"))return"⬆️";return"🧭"}
+function windArrow(direction=""){const d=String(direction);if(d.includes("北北東")||d.includes("東北"))return"↗️";if(d.includes("東南")||d.includes("南東"))return"↘️";if(d.includes("南西")||d.includes("西南"))return"↙️";if(d.includes("西北")||d.includes("北西"))return"↖️";if(d.includes("東"))return"➡️";if(d.includes("南"))return"⬇️";if(d.includes("西"))return"⬅️";if(d.includes("北"))return"⬆️";return"🧭"}
 
 function parseRows(data){
-  const groups=data?.records?.Locations||[];
-  const rows=[];
+  const groups=data?.records?.Locations||[],rows=[];
   for(const group of groups){
     const city=group?.LocationsName||"未知縣市";
     for(const l of group?.Location||[]){
       const es=l?.WeatherElement||[];
       const find=(...names)=>es.find(x=>names.includes(x.ElementName));
       const first=(...names)=>find(...names)?.Time?.[0]?.ElementValue?.[0]||{};
-      rows.push({
-        city,
-        town:l?.LocationName||"未知鄉鎮",
-        latitude:num(l?.Latitude),
-        longitude:num(l?.Longitude),
-        temperature:num(first("溫度","Temperature").Temperature),
-        humidity:num(first("相對濕度","RelativeHumidity").RelativeHumidity),
-        pop:num(first("降雨機率","ProbabilityOfPrecipitation").ProbabilityOfPrecipitation),
-        windDirection:first("風向","WindDirection").WindDirection??"--",
-        windSpeed:num(first("風速","WindSpeed").WindSpeed),
-        weather:first("天氣現象","Weather").Weather??"資料待更新",
-        start:find("溫度","Temperature")?.Time?.[0]?.StartTime||find("溫度","Temperature")?.Time?.[0]?.DataTime||""
-      });
+      rows.push({city,town:l?.LocationName||"未知鄉鎮",latitude:num(l?.Latitude),longitude:num(l?.Longitude),temperature:num(first("溫度","Temperature").Temperature),humidity:num(first("相對濕度","RelativeHumidity").RelativeHumidity),pop:num(first("降雨機率","ProbabilityOfPrecipitation").ProbabilityOfPrecipitation),windDirection:first("風向","WindDirection").WindDirection??"--",windSpeed:num(first("風速","WindSpeed").WindSpeed),weather:first("天氣現象","Weather").Weather??"資料待更新",start:find("溫度","Temperature")?.Time?.[0]?.StartTime||find("溫度","Temperature")?.Time?.[0]?.DataTime||""});
     }
   }
   return rows;
 }
-
-function aggregate(rows){
-  const m=new Map();
-  for(const r of rows)if(!m.has(r.city))m.set(r.city,r);
-  return[...m.values()]
-}
 function fmt(v,s=""){return v==null?"--":(Number.isInteger(v)?v:v.toFixed(1))+s}
-
-function render(){
-  const g=$("#weatherGrid"),q=$("#searchInput").value.trim();g.innerHTML="";
-  const rows=state.rows.filter(r=>(r.city+r.town).includes(q));
-  if(!rows.length){g.innerHTML='<div class="source-card"><strong>沒有符合的資料</strong><p>請確認搜尋文字或重新取得資料。</p></div>';return}
+function cities(){return [...new Set(state.rows.map(r=>r.city))]}
+function towns(city){return state.rows.filter(r=>r.city===city).sort((a,b)=>a.town.localeCompare(b.town,"zh-Hant"))}
+function cityRepresentative(city){const rs=towns(city);return rs[0]||null}
+function loadDefaults(){
+  try{const saved=JSON.parse(localStorage.getItem(DEFAULT_KEY)||"[]");if(Array.isArray(saved)&&saved.length)state.defaultCities=saved.slice(0,9)}catch(_){}
+}
+function saveDefaults(){localStorage.setItem(DEFAULT_KEY,JSON.stringify(state.defaultCities.slice(0,9)));updateDefaultCount()}
+function updateDefaultCount(){$("#defaultCount").textContent=state.defaultCities.length+" / 9"}
+function ensureDefaults(){
+  const available=cities();
+  state.defaultCities=state.defaultCities.filter(c=>available.includes(c));
+  if(!state.defaultCities.length)state.defaultCities=available.slice(0,9);
+  state.defaultCities=state.defaultCities.slice(0,9);
+  saveDefaults();
+}
+function renderSuggestions(){
+  const box=$("#suggestions"),q=$("#searchInput").value.trim();
+  if(!q){box.classList.add("hidden");return}
+  const matches=[];
+  for(const city of cities())if(city.includes(q))matches.push({type:"city",city,town:""});
+  for(const r of state.rows)if(r.town.includes(q)||r.city.includes(q)){if(!matches.some(x=>x.type==="town"&&x.city===r.city&&x.town===r.town))matches.push({type:"town",city:r.city,town:r.town})}
+  box.innerHTML="";
+  matches.slice(0,12).forEach(m=>{const b=document.createElement("button");b.type="button";b.className="suggestion";b.innerHTML=m.type==="city"?m.city+"<small>縣市</small>":m.town+"<small>"+m.city+"</small>";b.addEventListener("click",()=>selectSearch(m));box.appendChild(b)});
+  box.classList.toggle("hidden",!matches.length);
+}
+function selectSearch(m){
+  $("#suggestions").classList.add("hidden");$("#searchInput").value=m.type==="city"?m.city:m.town;state.selectedCity=m.city;state.selectedTown=m.town;
+  if(m.type==="city"){populateTownSelect(m.city);$("#townSelectWrap").classList.remove("hidden");renderCityCards(m.city)}
+  else{$("#townSelectWrap").classList.remove("hidden");populateTownSelect(m.city,m.town);renderTownResult(m.city,m.town)}
+}
+function populateTownSelect(city,selected=""){
+  const sel=$("#townSelect");sel.innerHTML='<option value="">請選擇鄉鎮</option>';
+  towns(city).forEach(r=>{const o=document.createElement("option");o.value=r.town;o.textContent=r.town;if(r.town===selected)o.selected=true;sel.appendChild(o)});
+}
+function renderTownResult(city,town){
+  const r=state.rows.find(x=>x.city===city&&x.town===town);if(!r)return;
+  renderRows([r],false);
+  $("#searchHint").textContent="目前顯示："+city+"｜"+town+"。選擇其他鄉鎮即可切換。";
+}
+function renderCityCards(city){renderRows([cityRepresentative(city)].filter(Boolean),false);$("#searchHint").textContent="已選擇："+city+"，下方選單可查看該縣市所有鄉鎮。"}
+function renderRows(rows,showAll=false){
+  const g=$("#weatherGrid");g.innerHTML="";
+  if(!rows.length){g.innerHTML='<div class="source-card"><strong>沒有符合的資料</strong><p>請重新搜尋或清除選擇。</p></div>';return}
   const t=$("#weatherTemplate");
-  for(const r of rows){
-    const n=t.content.cloneNode(true);
-    n.querySelector(".city").textContent=r.city;
-    n.querySelector(".town").textContent=r.town;
-    n.querySelector(".weather-icon").textContent=icon(r.weather);
-    n.querySelector(".temp").textContent=fmt(r.temperature);
-    n.querySelector(".weather-name").textContent=r.weather;
-    n.querySelector(".humidity").textContent=fmt(r.humidity,"%");
-    n.querySelector(".pop").textContent=fmt(r.pop,"%");
-    n.querySelector(".wind-direction").textContent=windArrow(r.windDirection)+" "+(r.windDirection||"--");
-    n.querySelector(".wind-speed").textContent=fmt(r.windSpeed," m/s");
+  rows.forEach(r=>{
+    const n=t.content.cloneNode(true),check=n.querySelector(".default-check");
+    n.querySelector(".city").textContent=r.city;n.querySelector(".town").textContent=r.town;
+    n.querySelector(".weather-icon").textContent=icon(r.weather);n.querySelector(".temp").textContent=fmt(r.temperature);
+    n.querySelector(".weather-name").textContent=r.weather;n.querySelector(".humidity").textContent=fmt(r.humidity,"%");n.querySelector(".pop").textContent=fmt(r.pop,"%");
+    n.querySelector(".wind-direction").textContent=windArrow(r.windDirection)+" "+(r.windDirection||"--");n.querySelector(".wind-speed").textContent=fmt(r.windSpeed," m/s");
     n.querySelector(".forecast-time").textContent=r.start?"預報時間："+new Date(r.start).toLocaleString("zh-TW",{hour12:false}):"預報時間：--";
-    g.appendChild(n)
-  }
+    check.checked=state.defaultCities.includes(r.city);
+    check.addEventListener("change",()=>toggleDefault(r.city,check.checked));
+    g.appendChild(n);
+  });
+}
+function toggleDefault(city,on){
+  if(on){if(state.defaultCities.includes(city))return;if(state.defaultCities.length>=9){alert("預設顯示最多 9 個縣市，請先取消其他縣市。");renderDefaultCards();return}state.defaultCities.push(city)}
+  else state.defaultCities=state.defaultCities.filter(c=>c!==city);
+  saveDefaults();renderDefaultCards();
+}
+function renderDefaultCards(){
+  const rows=state.defaultCities.map(city=>cityRepresentative(city)).filter(Boolean);
+  renderRows(rows,true);
+  $("#searchHint").textContent="勾選「預設」即可讓該縣市在下次開啟網頁時自動出現；最多 9 個。";
+}
+function clearSearch(){
+  state.selectedCity="";state.selectedTown="";$("#searchInput").value="";$("#townSelect").innerHTML='<option value="">請先選擇縣市</option>';$("#townSelectWrap").classList.add("hidden");$("#suggestions").classList.add("hidden");renderDefaultCards();
 }
 function summary(){
   const ts=state.rows.map(r=>r.temperature).filter(Number.isFinite),hs=state.rows.map(r=>r.humidity).filter(Number.isFinite);
-  $("#cityCount").textContent=new Set(state.rows.map(r=>r.city)).size;
-  $("#recordCount").textContent=state.rows.length;
-  $("#avgTemp").textContent=ts.length?((ts.reduce((a,b)=>a+b,0)/ts.length).toFixed(1)+" °C"):"--";
-  $("#avgHumidity").textContent=hs.length?((hs.reduce((a,b)=>a+b,0)/hs.length).toFixed(1)+" %"):"--"
+  $("#cityCount").textContent=cities().length;$("#recordCount").textContent=state.rows.length;
+  $("#avgTemp").textContent=ts.length?(ts.reduce((a,b)=>a+b,0)/ts.length).toFixed(1)+" °C":"--";
+  $("#avgHumidity").textContent=hs.length?(hs.reduce((a,b)=>a+b,0)/hs.length).toFixed(1)+" %":"--";
 }
 function status(a,b){$("#statusTitle").textContent=a;$("#statusText").textContent=b}
 async function loadWeather(){
   status("正在取得資料…","正在透過網站後端連線至中央氣象署。");$("#refreshBtn").disabled=true;
   try{
-    const res=await fetch(API_URL);const data=await res.json().catch(()=>null);
+    const res=await fetch(API_URL),data=await res.json().catch(()=>null);
     if(!res.ok)throw new Error(data?.message||data?.result?.message||("HTTP "+res.status));
     if(data?.success===false)throw new Error(data?.result?.message||data?.message||"CWA API 回傳錯誤");
-    const parsed=parseRows(data);
-    state.rows=aggregate(parsed);
+    state.rows=parseRows(data);
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
-    render();summary();$("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
-    status("資料取得成功","目前顯示 "+state.rows.length+" 個縣市代表資料，已讀取中央氣象署溫度、濕度、降雨機率、風向與風速。");
+    loadDefaults();ensureDefaults();summary();renderDefaultCards();
+    $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
+    status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
   }catch(e){console.error(e);status("取得資料失敗",e.message)}finally{$("#refreshBtn").disabled=false}
 }
-$("#refreshBtn").addEventListener("click",loadWeather);$("#searchInput").addEventListener("input",render);window.addEventListener("load",loadWeather);
+$("#refreshBtn").addEventListener("click",loadWeather);
+$("#searchInput").addEventListener("input",renderSuggestions);
+$("#townSelect").addEventListener("change",e=>{if(!state.selectedCity)return;if(e.target.value)renderTownResult(state.selectedCity,e.target.value);else renderCityCards(state.selectedCity)});
+$("#clearSearchBtn").addEventListener("click",clearSearch);
+document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
+window.addEventListener("load",loadWeather);
