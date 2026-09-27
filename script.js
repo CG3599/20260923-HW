@@ -131,6 +131,7 @@ function selectSearch(m){
   $("#townSelectWrap").classList.remove("hidden");
   $("#searchHint").textContent="已選擇："+m.city+"，請從下方下拉選單選擇該地區的鄉鎮。";
   renderCityCards(m.city);
+  setTimeout(()=>{$("#townSelect").focus();},0);
 }
 function populateTownSelect(city,selected=""){
   const sel=$("#townSelect");sel.innerHTML='<option value="">請選擇鄉鎮</option>';
