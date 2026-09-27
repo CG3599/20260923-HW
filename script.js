@@ -38,18 +38,38 @@ function ensureDefaults(){
 }
 function renderSuggestions(){
   const box=$("#suggestions"),q=$("#searchInput").value.trim();
-  if(!q){box.classList.add("hidden");return}
-  const matches=[];
-  for(const city of cities())if(city.includes(q))matches.push({type:"city",city,town:""});
-  for(const r of state.rows)if(r.town.includes(q)||r.city.includes(q)){if(!matches.some(x=>x.type==="town"&&x.city===r.city&&x.town===r.town))matches.push({type:"town",city:r.city,town:r.town})}
+  if(!q){box.classList.add("hidden");$("#townSelectWrap").classList.add("hidden");return}
+  const exactCity=cities().find(c=>c===q);
+  if(exactCity){
+    state.selectedCity=exactCity;state.selectedTown="";
+    populateTownSelect(exactCity);
+    $("#townSelectWrap").classList.remove("hidden");
+    $("#searchHint").textContent="已輸入："+exactCity+"，請從下方下拉選單選擇該地區的鄉鎮。";
+    box.classList.add("hidden");
+    renderCityCards(exactCity);
+    return;
+  }
+  $("#townSelectWrap").classList.add("hidden");
+  const matches=cities().filter(city=>city.includes(q));
   box.innerHTML="";
-  matches.slice(0,12).forEach(m=>{const b=document.createElement("button");b.type="button";b.className="suggestion";b.innerHTML=m.type==="city"?m.city+"<small>縣市</small>":m.town+"<small>"+m.city+"</small>";b.addEventListener("click",()=>selectSearch(m));box.appendChild(b)});
+  matches.slice(0,12).forEach(city=>{
+    const b=document.createElement("button");
+    b.type="button";b.className="suggestion";
+    b.innerHTML=city+"<small>縣市</small>";
+    b.addEventListener("click",()=>selectSearch({type:"city",city,town:""}));
+    box.appendChild(b);
+  });
   box.classList.toggle("hidden",!matches.length);
 }
 function selectSearch(m){
-  $("#suggestions").classList.add("hidden");$("#searchInput").value=m.type==="city"?m.city:m.town;state.selectedCity=m.city;state.selectedTown=m.town;
-  if(m.type==="city"){populateTownSelect(m.city);$("#townSelectWrap").classList.remove("hidden");renderCityCards(m.city)}
-  else{$("#townSelectWrap").classList.remove("hidden");populateTownSelect(m.city,m.town);renderTownResult(m.city,m.town)}
+  $("#suggestions").classList.add("hidden");
+  $("#searchInput").value=m.city;
+  state.selectedCity=m.city;
+  state.selectedTown="";
+  populateTownSelect(m.city);
+  $("#townSelectWrap").classList.remove("hidden");
+  $("#searchHint").textContent="已選擇："+m.city+"，請從下方下拉選單選擇該地區的鄉鎮。";
+  renderCityCards(m.city);
 }
 function populateTownSelect(city,selected=""){
   const sel=$("#townSelect");sel.innerHTML='<option value="">請選擇鄉鎮</option>';
