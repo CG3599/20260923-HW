@@ -1,4 +1,4 @@
-# 20260923-HW｜全台氣象靜態網頁
+# 20260923-hw-taiwan-weather｜全台氣象靜態網頁
 
 目前先完成氣象靜態網站，使用原生 HTML / CSS / JavaScript 串接中央氣象署 OpenData。
 
