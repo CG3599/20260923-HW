@@ -73,7 +73,7 @@ function renderSuggestions(){
   items.slice(0,16).forEach(m=>{
     const b=document.createElement("button");
     b.type="button";b.className="suggestion";
-    b.innerHTML=m.name+"<small>"+m.label+(m.type==="town"?"｜"+m.city:"")+"</small>";
+    b.innerHTML="<span>"+m.name+"</span><small>"+m.label+(m.type==="town"?"｜"+m.city:"")+"</small>";
     b.addEventListener("click",()=>selectSearch(m));
     box.appendChild(b);
   });
