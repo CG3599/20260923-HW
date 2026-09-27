@@ -195,7 +195,7 @@ async function loadWeather(){
 $("#refreshBtn").addEventListener("click",loadWeather);
 $("#searchInput").addEventListener("input",renderSuggestions);
 $("#searchInput").addEventListener("keydown",handleSearchKeydown);
-$("#townSelect").addEventListener("focus",()=>{$("#townSelect").size=15});\n$("#townSelect").addEventListener("blur",()=>{$("#townSelect").size=1});\n$("#townSelect").addEventListener("change",e=>{if(!state.selectedCity)return;if(e.target.value)renderTownResult(state.selectedCity,e.target.value);else renderCityCards(state.selectedCity)});
+$("#townSelect").addEventListener("change",e=>{if(!state.selectedCity)return;if(e.target.value)renderTownResult(state.selectedCity,e.target.value);else renderCityCards(state.selectedCity)});
 $("#clearSearchBtn").addEventListener("click",clearSearch);
 document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
 window.addEventListener("load",loadWeather);
