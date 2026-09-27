@@ -12,8 +12,17 @@ export default async function handler(req, res) {
     "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093"
   );
 
-  // CWA 的 F-D0047 系列實務上可使用 Authorization query parameter。
-  // API Key 只在 Vercel Serverless Function 內使用，不會暴露給瀏覽器。
+  // 093 為全臺鄉鎮資料；指定 20 個縣市資料區域，避免 API 對無條件查詢回傳 Resource not found。
+  const locationIds = [
+    "F-D0047-001", "F-D0047-005", "F-D0047-009", "F-D0047-013",
+    "F-D0047-017", "F-D0047-021", "F-D0047-025", "F-D0047-029",
+    "F-D0047-033", "F-D0047-037", "F-D0047-041", "F-D0047-045",
+    "F-D0047-049", "F-D0047-053", "F-D0047-057", "F-D0047-061",
+    "F-D0047-065", "F-D0047-069", "F-D0047-073", "F-D0047-077",
+    "F-D0047-081", "F-D0047-085"
+  ];
+
+  url.searchParams.set("locationId", locationIds.join(","));
   url.searchParams.set("Authorization", key);
   url.searchParams.set("format", "JSON");
 
