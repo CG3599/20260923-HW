@@ -18,7 +18,10 @@ function parseRows(data){
       rows.push({city,town:l?.LocationName||"未知鄉鎮",latitude:num(l?.Latitude),longitude:num(l?.Longitude),temperature:num(first("溫度","Temperature").Temperature),humidity:num(first("相對濕度","RelativeHumidity").RelativeHumidity),pop:num(first("降雨機率","ProbabilityOfPrecipitation").ProbabilityOfPrecipitation),windDirection:first("風向","WindDirection").WindDirection??"--",windSpeed:num(first("風速","WindSpeed").WindSpeed),weather:first("天氣現象","Weather").Weather??"資料待更新",start:find("溫度","Temperature")?.Time?.[0]?.StartTime||find("溫度","Temperature")?.Time?.[0]?.DataTime||""});
     }
   }
-  return rows;
+  return rows.map(r=>{
+    const riding=ridingCondition(r);
+    return {...r,riding};
+  });
 }
 function ridingAdvice(condition){
   const reasons=condition?.reasons||[];
@@ -91,7 +94,9 @@ function ridingCondition(r){
     icon="🟡";
   }
 
-  return {score,level,label,icon,reasons};
+  const condition={score,level,label,icon,reasons};
+  condition.advice=ridingAdvice(condition);
+  return condition;
 }
 
 function ridingLevel(score){
@@ -234,6 +239,14 @@ function renderRows(rows,showAll=false){
     n.querySelector(".weather-icon").textContent=icon(r.weather);n.querySelector(".temp").textContent=fmt(r.temperature);
     n.querySelector(".weather-name").textContent=r.weather;n.querySelector(".humidity").textContent=fmt(r.humidity,"%");n.querySelector(".pop").textContent=fmt(r.pop,"%");
     n.querySelector(".wind-direction").textContent=windArrow(r.windDirection)+" "+(r.windDirection||"--");n.querySelector(".wind-speed").textContent=fmt(r.windSpeed," m/s");
+    const riding=r.riding||ridingCondition(r);
+    const levelEl=n.querySelector(".riding-level");
+    const panel=n.querySelector(".riding-panel");
+    levelEl.textContent=(riding.icon||"")+" "+(riding.label||"資料不足");
+    panel.className="riding-panel riding-"+(riding.level||"unknown");
+    n.querySelector(".riding-score-value").textContent=Number.isFinite(riding.score)?riding.score:"--";
+    n.querySelector(".riding-reasons-value").textContent=riding.reasons?.length?riding.reasons.join("、"):"目前沒有明顯不利因素";
+    n.querySelector(".riding-advice-value").textContent=riding.advice||"請留意最新天氣資訊。";
     n.querySelector(".forecast-time").textContent=r.start?"預報時間："+new Date(r.start).toLocaleString("zh-TW",{hour12:false}):"預報時間：--";
     check.checked=state.defaultCities.includes(r.city);
     check.addEventListener("change",()=>toggleDefault(r.city,check.checked));
@@ -287,10 +300,11 @@ function renderTaiwanMap(){
   $("#mapCount").textContent=defaults.length+" 個預設地區";
   defaults.forEach(r=>{
     const s=weatherMarkerStyle(r);
+    const riding=r.riding||ridingCondition(r);
     const marker=L.circleMarker([r.latitude,r.longitude],{
       radius:s.radius,fillColor:s.fillColor,color:s.color,weight:1.5,fillOpacity:.82
     }).addTo(taiwanMap);
-    marker.bindPopup('<div class="weather-popup"><h4>'+r.city+"｜"+r.town+'</h4><div class="weather-temp">'+fmt(r.temperature," °C")+'</div><p>💧 濕度：'+fmt(r.humidity," %")+'</p><p>🌧️ 降雨機率：'+fmt(r.pop," %")+'</p><p>💨 風向：'+(r.windDirection||"--")+'</p><p>💨 風速：'+fmt(r.windSpeed," m/s")+'</p><p class="popup-muted">'+(r.weather||"資料待更新")+'</p></div>');
+    marker.bindPopup('<div class="weather-popup"><h4>'+r.city+"｜"+r.town+'</h4><div class="weather-temp">'+fmt(r.temperature," °C")+'</div><p>💧 濕度：'+fmt(r.humidity," %")+'</p><p>🌧️ 降雨機率：'+fmt(r.pop," %")+'</p><p>💨 風向：'+(r.windDirection||"--")+'</p><p>💨 風速：'+fmt(r.windSpeed," m/s")+'</p><p><strong>🏍️ 騎乘條件：'+(riding.icon||"")+" "+(riding.label||"--")+'</strong></p><p>評分：'+(Number.isFinite(riding.score)?riding.score:"--")+'</p><p class="popup-muted">'+(riding.reasons?.length?"主要因素："+riding.reasons.join("、")+"<br>":"")+(riding.advice||"")+'</p></div>');
     weatherMarkers.push(marker);
   });
   if(defaults.length){
