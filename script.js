@@ -73,6 +73,13 @@ function ridingCondition(r){
   return {score,level,label,icon,reasons};
 }
 
+function ridingLevel(score){
+  if(score>=7)return {level:"high",label:"高風險",icon:"🔴"};
+  if(score>=4)return {level:"caution",label:"需注意",icon:"🟠"};
+  if(score>=2)return {level:"normal",label:"普通",icon:"🟡"};
+  return {level:"good",label:"良好",icon:"🟢"};
+}
+
 function fmt(v,s=""){return v==null?"--":(Number.isInteger(v)?v:v.toFixed(1))+s}
 function cities(){return [...new Set(state.rows.map(r=>r.city))]}
 function towns(city){return state.rows.filter(r=>r.city===city).sort((a,b)=>a.town.localeCompare(b.town,"zh-Hant"))}
