@@ -28,7 +28,7 @@
       for(const g of api?.records?.Locations||[]){
         for(const l of g.Location||[]){
           const es=l.WeatherElement||[],find=(...names)=>es.find(x=>names.includes(x.ElementName)),first=(...names)=>find(...names)?.Time?.[0]?.ElementValue?.[0]||{};
-          rows.push({city:g.LocationsName,town:l.LocationName,latitude:num(l.Latitude),longitude:num(l.Longitude),temperature:num(first("溫度","Temperature").Temperature),humidity:num(first("相對濕度","RelativeHumidity").RelativeHumidity),pop:num(first("降雨機率","ProbabilityOfPrecipitation").ProbabilityOfPrecipitation),windSpeed:num(first("風速","WindSpeed").WindSpeed),weather:first("天氣現象","Weather").Weather||"資料待更新"});
+          rows.push({city:g.LocationsName,town:l.LocationName,latitude:num(l.Latitude),longitude:num(l.Longitude),temperature:num(first("溫度","Temperature").Temperature),humidity:num(first("相對濕度","RelativeHumidity").RelativeHumidity),pop:num(first("3小時降雨機率","3小時降雨機率（%）","降雨機率","ProbabilityOfPrecipitation","3-hour ProbabilityOfPrecipitation").ProbabilityOfPrecipitation),windSpeed:num(first("風速","WindSpeed").WindSpeed),weather:first("天氣現象","Weather").Weather||"資料待更新"});
         }
       }
       const fr=rows.find(r=>r.city===fc&&r.town===ft),tr=rows.find(r=>r.city===tc&&r.town===tt);
