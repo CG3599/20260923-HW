@@ -20,6 +20,27 @@ function parseRows(data){
   }
   return rows;
 }
+function ridingAdvice(condition){
+  const reasons=condition?.reasons||[];
+  const level=condition?.level;
+  if(level==="high"){
+    return "目前騎乘條件較不利，出發前請重新確認最新天氣資訊，並留意降雨、風勢或極端溫度。";
+  }
+  if(level==="caution"){
+    if(reasons.includes("降雨機率高")||reasons.includes("降雨機率偏高")||reasons.includes("可能有降雨")){
+      return "騎乘時需留意降雨，建議攜帶雨具並持續確認天氣變化。";
+    }
+    if(reasons.includes("風速強")||reasons.includes("風速偏強")||reasons.includes("風速較高")){
+      return "騎乘時需留意風勢，經過橋梁、開闊路段時請特別注意。";
+    }
+    return "目前騎乘條件需注意，建議出發前再次確認天氣與路況。";
+  }
+  if(level==="normal"){
+    return "整體騎乘條件尚可，仍建議持續留意降雨與風勢變化。";
+  }
+  return "目前天氣條件較穩定，適合一般騎乘；出發前仍可確認最新天氣資訊。";
+}
+
 function ridingCondition(r){
   const temp=num(r?.temperature);
   const pop=num(r?.pop);
