@@ -135,14 +135,56 @@ function cityRepresentative(city){const rs=towns(city);return rs[0]||null}
 function routeOptionValue(r){return r.city+"||"+r.town}
 function findRouteRow(value){const [city,town]=String(value||"").split("||");return state.rows.find(r=>r.city===city&&r.town===town)||null}
 function populateRouteSelects(){
-  const from=$("#routeFrom"),to=$("#routeTo");
-  if(!from||!to)return;
-  const options=state.rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)).slice().sort((a,b)=>{
-    const ac=(a.city+a.town).localeCompare(b.city+b.town,"zh-Hant"); return ac;
-  });
+  const options=state.rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)).slice().sort((a,b)=>(a.city+a.town).localeCompare(b.city+b.town,"zh-Hant"));
   const html='<option value="">請選擇地點</option>'+options.map(r=>'<option value="'+routeOptionValue(r).replaceAll('"','&quot;')+'">'+r.city+"｜"+r.town+"</option>").join("");
-  from.innerHTML=html;to.innerHTML=html;
+  ["#routeFrom","#routeTo"].forEach(sel=>{const el=$(sel);if(el)el.innerHTML=html;});
+  setupRouteSearch("from"); setupRouteSearch("to");
 }
+function routeSearchElements(side){
+  const cap=side==="from"?"From":"To";
+  return {input:$("#route"+cap+"Search"),suggestions:$("#route"+cap+"Suggestions"),townWrap:$("#route"+cap+"TownWrap"),town:$("#route"+cap+"Town"),value:$("#route"+cap)};
+}
+function populateRouteTown(side,city,selected=""){
+  const el=routeSearchElements(side).town;
+  el.innerHTML='<option value="">請選擇鄉鎮</option>';
+  towns(city).filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)).forEach(r=>{const o=document.createElement("option");o.value=routeOptionValue(r);o.textContent=r.town;if(r.town===selected)o.selected=true;el.appendChild(o);});
+}
+function setRouteLocation(side,r){
+  const e=routeSearchElements(side); if(!r)return;
+  e.value.value=routeOptionValue(r); e.input.value=r.town;
+  e.townWrap.classList.add("hidden"); e.suggestions.classList.add("hidden");
+}
+function renderRouteSuggestions(side){
+  const e=routeSearchElements(side),q=normalizeSearchText(e.input.value);
+  e.suggestions.innerHTML="";
+  if(!q){e.suggestions.classList.add("hidden");e.townWrap.classList.add("hidden");return;}
+  const cityMatches=cities().filter(c=>normalizeSearchText(c).includes(q));
+  const townMatches=state.rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)&&normalizeSearchText(r.town).includes(q));
+  const exactCity=cities().find(c=>normalizeSearchText(c)===q);
+  if(exactCity){
+    e.suggestions.classList.add("hidden");e.townWrap.classList.remove("hidden");populateRouteTown(side,exactCity);
+    e.input.dataset.city=exactCity;e.input.dataset.mode="city";e.value.value="";
+    return;
+  }
+  const items=[],seen=new Set();
+  cityMatches.forEach(city=>{if(!seen.has(city)){seen.add(city);items.push({type:"city",city,town:"",name:city,label:"縣市"});}});
+  townMatches.forEach(r=>items.push({type:"town",city:r.city,town:r.town,name:r.town,label:"鄉鎮"}));
+  items.slice(0,10).forEach(m=>{const b=document.createElement("button");b.type="button";b.className="suggestion";b.innerHTML="<span>"+m.name+"</span><small>"+m.label+(m.type==="town"?"｜"+m.city:"")+"</small>";b.addEventListener("click",()=>selectRouteSearch(side,m));e.suggestions.appendChild(b);});
+  e.suggestions.classList.toggle("hidden",!items.length);
+  e.townWrap.classList.add("hidden");
+}
+function selectRouteSearch(side,m){
+  const e=routeSearchElements(side); e.input.dataset.city=m.city;
+  if(m.type==="town"){const r=findRouteRow(routeOptionValue({city:m.city,town:m.town}));setRouteLocation(side,r);return;}
+  e.input.value=m.city;e.input.dataset.mode="city";e.value.value="";populateRouteTown(side,m.city);e.townWrap.classList.remove("hidden");e.suggestions.classList.add("hidden");
+}
+function setupRouteSearch(side){
+  const e=routeSearchElements(side); if(!e.input||e.input.dataset.ready)return;
+  e.input.dataset.ready="1";
+  e.input.addEventListener("input",()=>renderRouteSuggestions(side));
+  e.town.addEventListener("change",()=>{const r=findRouteRow(e.town.value);if(r)setRouteLocation(side,r);});
+}
+
 function haversineKm(a,b){
   const R=6371;
   const p1=a[0]*Math.PI/180,p2=b[0]*Math.PI/180;
