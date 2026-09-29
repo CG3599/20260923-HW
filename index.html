@@ -4,6 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>全台氣象資訊｜CWA Weather</title><meta name="description" content="中央氣象署全台氣象資訊">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </head>
 <body>
 <header class="topbar">
@@ -46,6 +47,15 @@
   <div id="weatherGrid" class="weather-grid"></div>
 </section>
 
+<section class="map-panel">
+  <div class="section-head map-head">
+    <div><div class="eyebrow">TAIWAN WEATHER MAP</div><h2>台灣氣象地圖</h2></div>
+    <span id="mapCount" class="map-count">-- 個鄉鎮</span>
+  </div>
+  <div id="taiwanMap" class="taiwan-map" aria-label="台灣氣象 GIS 地圖"></div>
+  <p class="map-hint">點擊地圖上的鄉鎮標記，可查看溫度、濕度、降雨機率、風向與風速。</p>
+</section>
+
 <section class="source-card"><h2>資料說明</h2><p>本頁採用中央氣象署「鄉鎮天氣預報－全臺灣各鄉鎮市區預報資料」API，讀取溫度、相對濕度、降雨機率、風向與風速等欄位。</p><p class="muted">API 授權碼由 Vercel Environment Variables 安全管理，不會儲存在瀏覽器或 GitHub。預設縣市設定會保存在本機瀏覽器。</p></section>
 </main>
 
@@ -68,5 +78,6 @@
 </template>
 
 <footer><span>2026 AIoT-DA HW1</span><a href="https://opendata.cwa.gov.tw/" target="_blank" rel="noopener noreferrer">中央氣象署開放資料平台 ↗</a></footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="script.js"></script>
 </body></html>
