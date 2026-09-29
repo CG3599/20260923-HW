@@ -52,7 +52,25 @@ function ridingCondition(r){
     reasons.push("濕度高");
   }
 
-  return {score,reasons};
+  let level="good";
+  let label="良好";
+  let icon="🟢";
+
+  if(score>=7){
+    level="high";
+    label="高風險";
+    icon="🔴";
+  }else if(score>=4){
+    level="caution";
+    label="需注意";
+    icon="🟠";
+  }else if(score>=2){
+    level="normal";
+    label="普通";
+    icon="🟡";
+  }
+
+  return {score,level,label,icon,reasons};
 }
 
 function fmt(v,s=""){return v==null?"--":(Number.isInteger(v)?v:v.toFixed(1))+s}
