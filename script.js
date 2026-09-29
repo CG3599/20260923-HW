@@ -275,10 +275,24 @@ async function analyzeRoute(){
   const button=$("#analyzeRouteBtn");
   button.disabled=true;button.textContent="正在規劃道路並分析沿線天氣…";
   try{
-    const url="https://router.project-osrm.org/route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude+"?overview=full&geometries=geojson&steps=false";
-    const res=await fetch(url);
-    const data=await res.json();
-    if(!res.ok||data.code!=="Ok"||!data.routes?.length)throw new Error("目前無法取得這兩個地點之間的道路路線。");
+    const routeUrls=[
+      "https://router.project-osrm.org/route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude+"?overview=full&geometries=geojson&steps=false",
+      "https://routing.openstreetmap.de/routed-car/route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude+"?overview=full&geometries=geojson&steps=false"
+    ];
+    let data=null;
+    for(const url of routeUrls){
+      try{
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),12000);
+        const res=await fetch(url,{signal:controller.signal});
+        const text=await res.text();
+        clearTimeout(timer);
+        let parsed=null;
+        try{parsed=JSON.parse(text)}catch(_){}
+        if(res.ok&&parsed?.code==="Ok"&&parsed?.routes?.length){data=parsed;break}
+      }catch(_){}
+    }
+    if(!data)throw new Error("目前無法取得這兩個地點之間的道路路線。請稍後再試。");
     const route=data.routes[0],coords=route.geometry.coordinates.map(p=>[p[1],p[0]]);
     const samples=sampleRoutePoints(coords,30);
     const nearby=[];
