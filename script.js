@@ -20,6 +20,41 @@ function parseRows(data){
   }
   return rows;
 }
+function ridingCondition(r){
+  const temp=num(r?.temperature);
+  const pop=num(r?.pop);
+  const humidity=num(r?.humidity);
+  const wind=num(r?.windSpeed);
+  let score=0;
+  const reasons=[];
+
+  if(Number.isFinite(pop)){
+    if(pop>=70){score+=4;reasons.push("降雨機率高");}
+    else if(pop>=40){score+=2;reasons.push("降雨機率偏高");}
+    else if(pop>=20){score+=1;reasons.push("可能有降雨");}
+  }
+
+  if(Number.isFinite(wind)){
+    if(wind>=10){score+=4;reasons.push("風速強");}
+    else if(wind>=7){score+=3;reasons.push("風速偏強");}
+    else if(wind>=5){score+=1;reasons.push("風速較高");}
+  }
+
+  if(Number.isFinite(temp)){
+    if(temp>=35){score+=4;reasons.push("高溫");}
+    else if(temp>=32){score+=2;reasons.push("炎熱");}
+    else if(temp<=10){score+=3;reasons.push("低溫");}
+    else if(temp<=15){score+=1;reasons.push("氣溫偏低");}
+  }
+
+  if(Number.isFinite(humidity)&&humidity>=90){
+    score+=1;
+    reasons.push("濕度高");
+  }
+
+  return {score,reasons};
+}
+
 function fmt(v,s=""){return v==null?"--":(Number.isInteger(v)?v:v.toFixed(1))+s}
 function cities(){return [...new Set(state.rows.map(r=>r.city))]}
 function towns(city){return state.rows.filter(r=>r.city===city).sort((a,b)=>a.town.localeCompare(b.town,"zh-Hant"))}
