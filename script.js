@@ -15,7 +15,7 @@ function parseRows(data){
       const es=l?.WeatherElement||[];
       const find=(...names)=>es.find(x=>names.includes(x.ElementName));
       const first=(...names)=>find(...names)?.Time?.[0]?.ElementValue?.[0]||{};
-      rows.push({city,town:l?.LocationName||"未知鄉鎮",latitude:num(l?.Latitude),longitude:num(l?.Longitude),temperature:num(first("溫度","Temperature").Temperature),humidity:num(first("相對濕度","RelativeHumidity").RelativeHumidity),pop:num(first("降雨機率","ProbabilityOfPrecipitation").ProbabilityOfPrecipitation),windDirection:first("風向","WindDirection").WindDirection??"--",windSpeed:num(first("風速","WindSpeed").WindSpeed),weather:first("天氣現象","Weather").Weather??"資料待更新",start:find("溫度","Temperature")?.Time?.[0]?.StartTime||find("溫度","Temperature")?.Time?.[0]?.DataTime||""});
+      rows.push({city,town:l?.LocationName||"未知鄉鎮",latitude:num(l?.Latitude),longitude:num(l?.Longitude),temperature:num(first("溫度","Temperature").Temperature),humidity:num(first("相對濕度","RelativeHumidity").RelativeHumidity),pop:num(first("3小時降雨機率","3小時降雨機率（%）","降雨機率","ProbabilityOfPrecipitation","3-hour ProbabilityOfPrecipitation").ProbabilityOfPrecipitation),windDirection:first("風向","WindDirection").WindDirection??"--",windSpeed:num(first("風速","WindSpeed").WindSpeed),weather:first("天氣現象","Weather").Weather??"資料待更新",start:find("溫度","Temperature")?.Time?.[0]?.StartTime||find("溫度","Temperature")?.Time?.[0]?.DataTime||""});
     }
   }
   return rows.map(r=>{
