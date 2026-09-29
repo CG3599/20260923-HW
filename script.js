@@ -132,6 +132,100 @@ function fmt(v,s=""){return v==null?"--":(Number.isInteger(v)?v:v.toFixed(1))+s}
 function cities(){return [...new Set(state.rows.map(r=>r.city))]}
 function towns(city){return state.rows.filter(r=>r.city===city).sort((a,b)=>a.town.localeCompare(b.town,"zh-Hant"))}
 function cityRepresentative(city){const rs=towns(city);return rs[0]||null}
+function routeOptionValue(r){return r.city+"||"+r.town}
+function findRouteRow(value){const [city,town]=String(value||"").split("||");return state.rows.find(r=>r.city===city&&r.town===town)||null}
+function populateRouteSelects(){
+  const from=$("#routeFrom"),to=$("#routeTo");
+  if(!from||!to)return;
+  const options=state.rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)).slice().sort((a,b)=>{
+    const ac=(a.city+a.town).localeCompare(b.city+b.town,"zh-Hant"); return ac;
+  });
+  const html='<option value="">請選擇地點</option>'+options.map(r=>'<option value="'+routeOptionValue(r).replaceAll('"','&quot;')+'">'+r.city+"｜"+r.town+"</option>").join("");
+  from.innerHTML=html;to.innerHTML=html;
+}
+function haversineKm(a,b){
+  const R=6371;
+  const p1=a[0]*Math.PI/180,p2=b[0]*Math.PI/180;
+  const dp=(b[0]-a[0])*Math.PI/180,dl=(b[1]-a[1])*Math.PI/180;
+  const x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function routeLevel(score){return ridingLevel(score)}
+function routeDecision(level){
+  if(level==="high")return {icon:"🔴",label:"建議等待"};
+  if(level==="caution")return {icon:"🟠",label:"出發前再次確認"};
+  if(level==="normal")return {icon:"🟡",label:"建議確認天氣"};
+  return {icon:"🟢",label:"可騎乘"};
+}
+function sampleRoutePoints(coords,count=30){
+  if(!coords.length)return [];
+  const n=Math.min(count,coords.length),out=[];
+  if(n===1)return [coords[0]];
+  for(let i=0;i<n;i++){
+    const index=Math.round(i*(coords.length-1)/(n-1));
+    out.push(coords[index]);
+  }
+  return out;
+}
+function nearestWeatherRow(lat,lon){
+  let best=null,bestDistance=Infinity;
+  for(const r of state.rows){
+    if(!Number.isFinite(r.latitude)||!Number.isFinite(r.longitude))continue;
+    const d=haversineKm([lat,lon],[r.latitude,r.longitude]);
+    if(d<bestDistance){bestDistance=d;best=r;}
+  }
+  return best?{row:best,distance:bestDistance}:null;
+}
+function routeClass(level){return level==="high"?"route-high":level==="caution"?"route-caution":level==="normal"?"route-normal":"route-good"}
+async function analyzeRoute(){
+  const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
+  if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return}
+  if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return}
+  const button=$("#analyzeRouteBtn");
+  button.disabled=true;button.textContent="正在規劃道路並分析沿線天氣…";
+  try{
+    const url="https://router.project-osrm.org/route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude+"?overview=full&geometries=geojson&steps=false";
+    const res=await fetch(url);
+    const data=await res.json();
+    if(!res.ok||data.code!=="Ok"||!data.routes?.length)throw new Error("目前無法取得這兩個地點之間的道路路線。");
+    const route=data.routes[0],coords=route.geometry.coordinates.map(p=>[p[1],p[0]]);
+    const samples=sampleRoutePoints(coords,30);
+    const nearby=[];
+    const seen=new Set();
+    for(const p of samples){
+      const hit=nearestWeatherRow(p[0],p[1]);
+      if(hit&&!seen.has(hit.row.city+"||"+hit.row.town)){
+        seen.add(hit.row.city+"||"+hit.row.town);nearby.push(hit);
+      }
+    }
+    const conditions=nearby.map(x=>x.row.riding||ridingCondition(x.row)).filter(c=>Number.isFinite(c.score));
+    if(!conditions.length)throw new Error("沿線沒有足夠的氣象資料可供分析。");
+    const maxScore=Math.max(...conditions.map(c=>c.score));
+    const avgScore=conditions.reduce((a,c)=>a+c.score,0)/conditions.length;
+    const level=routeLevel(maxScore),decision=routeDecision(level.level);
+    const worst=nearby.reduce((best,x)=>((x.row.riding?.score??ridingCondition(x.row).score)>(best.row.riding?.score??ridingCondition(best.row).score)?x:best),nearby[0]);
+    const reasons=[...new Set(conditions.flatMap(c=>c.reasons||[]))];
+    const distanceKm=route.distance/1000,durationMin=Math.round(route.duration/60);
+    box.className="route-result "+routeClass(level.level);
+    box.innerHTML=
+      '<div class="route-result-head"><div class="route-result-title">'+from.city+"｜"+from.town+" → "+to.city+"｜"+to.town+'</div><strong class="route-result-level">'+level.icon+" "+level.label+'</strong></div>'+
+      '<div class="route-score-row"><div class="route-score"><strong>'+maxScore+'</strong><span>最差 Score</span></div><div class="route-summary">依道路路線沿線 '+nearby.length+' 個氣象資料點分析。<br><strong>建議：'+decision.icon+" "+decision.label+'</strong><br>最需注意路段：'+worst.row.city+"｜"+worst.row.town+'</div></div>'+
+      '<div class="route-evidence"><div><span>道路距離</span><strong>'+distanceKm.toFixed(1)+' km</strong></div><div><span>預估車程</span><strong>'+durationMin+' 分鐘</strong></div><div><span>沿線平均 Score</span><strong>'+avgScore.toFixed(1)+'</strong></div></div>'+
+      '<div class="route-reasons">主要因素：'+(reasons.length?reasons.join("、"):"目前沒有明顯不利因素")+'</div>';
+    if(taiwanMap){
+      if(routeLayer)routeLayer.remove();
+      routeLayer=L.polyline(coords,{color:"#7dd3fc",weight:5,opacity:.85}).addTo(taiwanMap);
+      const bounds=L.latLngBounds(coords);taiwanMap.fitBounds(bounds.pad(.12));
+    }
+  }catch(e){
+    console.error(e);
+    box.className="route-result";
+    box.innerHTML="<strong>路線分析失敗</strong><p class=\"route-hint\">"+e.message+"</p>";
+  }finally{
+    button.disabled=false;button.textContent="分析這段路的可騎行性";
+  }
+}
+
 function loadDefaults(){
   try{const saved=JSON.parse(localStorage.getItem(DEFAULT_KEY)||"[]");if(Array.isArray(saved)&&saved.length)state.defaultCities=saved.slice(0,9)}catch(_){}
 }
@@ -301,6 +395,7 @@ function summary(){
 }
 let taiwanMap=null;
 let weatherMarkers=[];
+let routeLayer=null;
 
 function weatherMarkerStyle(r){
   const temp=Number(r.temperature);
@@ -352,7 +447,7 @@ async function loadWeather(){
     if(data?.success===false)throw new Error(data?.result?.message||data?.message||"CWA API 回傳錯誤");
     state.rows=parseRows(data);
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
-    loadDefaults();ensureDefaults();summary();renderDefaultCards();renderTaiwanMap();
+    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();renderTaiwanMap();
     $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
   }catch(e){console.error(e);status("取得資料失敗",e.message)}finally{$("#refreshBtn").disabled=false}
@@ -362,5 +457,6 @@ $("#searchInput").addEventListener("input",renderSuggestions);
 $("#searchInput").addEventListener("keydown",handleSearchKeydown);
 $("#townSelect").addEventListener("change",e=>{if(!state.selectedCity)return;if(e.target.value)renderTownResult(state.selectedCity,e.target.value);else renderCityCards(state.selectedCity)});
 $("#clearSearchBtn").addEventListener("click",clearSearch);
+$("#analyzeRouteBtn").addEventListener("click",analyzeRoute);
 document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
 window.addEventListener("load",loadWeather);
