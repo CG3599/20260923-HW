@@ -33,8 +33,23 @@
       }
       const fr=rows.find(r=>r.city===fc&&r.town===ft),tr=rows.find(r=>r.city===tc&&r.town===tt);
       if(!fr||!tr)return;
-      const url="https://router.project-osrm.org/route/v1/driving/"+fr.longitude+","+fr.latitude+";"+tr.longitude+","+tr.latitude+"?overview=full&geometries=geojson&steps=false";
-      const data=await fetch(url).then(r=>r.json());
+      const routeUrls=[
+        "https://router.project-osrm.org/route/v1/driving/"+fr.longitude+","+fr.latitude+";"+tr.longitude+","+tr.latitude+"?overview=full&geometries=geojson&steps=false",
+        "https://routing.openstreetmap.de/routed-car/route/v1/driving/"+fr.longitude+","+fr.latitude+";"+tr.longitude+","+tr.latitude+"?overview=full&geometries=geojson&steps=false"
+      ];
+      let data=null;
+      for(const url of routeUrls){
+        try{
+          const controller=new AbortController();
+          const timer=setTimeout(()=>controller.abort(),12000);
+          const res=await fetch(url,{signal:controller.signal});
+          const text=await res.text();
+          clearTimeout(timer);
+          let parsed=null;
+          try{parsed=JSON.parse(text)}catch(_){}
+          if(res.ok&&parsed?.code==="Ok"&&parsed?.routes?.length){data=parsed;break}
+        }catch(_){}
+      }
       const coords=data?.routes?.[0]?.geometry?.coordinates?.map(p=>[p[1],p[0]])||[];
       if(!coords.length)return;
       const n=Math.min(30,coords.length),points=[],seen=new Set();
