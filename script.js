@@ -178,6 +178,49 @@ function summary(){
   $("#avgTemp").textContent=ts.length?(ts.reduce((a,b)=>a+b,0)/ts.length).toFixed(1)+" °C":"--";
   $("#avgHumidity").textContent=hs.length?(hs.reduce((a,b)=>a+b,0)/hs.length).toFixed(1)+" %":"--";
 }
+let taiwanMap=null;
+let weatherMarkers=[];
+
+function weatherMarkerStyle(r){
+  const temp=Number(r.temperature);
+  if(Number.isFinite(temp)&&temp>=30)return {radius:8,fillColor:"#fb7185",color:"#fecdd3"};
+  if(Number.isFinite(temp)&&temp>=26)return {radius:8,fillColor:"#fbbf24",color:"#fde68a"};
+  return {radius:8,fillColor:"#38bdf8",color:"#bae6fd"};
+}
+
+function initTaiwanMap(){
+  if(taiwanMap||typeof L==="undefined")return;
+  taiwanMap=L.map("taiwanMap",{zoomControl:true,preferCanvas:true}).setView([23.7,121.0],7);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+    maxZoom:19,
+    attribution:"&copy; OpenStreetMap &copy; CARTO"
+  }).addTo(taiwanMap);
+}
+
+function renderTaiwanMap(){
+  initTaiwanMap();
+  if(!taiwanMap)return;
+  weatherMarkers.forEach(m=>m.remove());
+  weatherMarkers=[];
+  const defaults=state.defaultCities.map(city=>cityRepresentative(city)).filter(r=>r&&Number.isFinite(r.latitude)&&Number.isFinite(r.longitude));
+  $("#mapCount").textContent=defaults.length+" 個預設地區";
+  defaults.forEach(r=>{
+    const s=weatherMarkerStyle(r);
+    const marker=L.circleMarker([r.latitude,r.longitude],{
+      radius:s.radius,fillColor:s.fillColor,color:s.color,weight:1.5,fillOpacity:.82
+    }).addTo(taiwanMap);
+    marker.bindPopup('<div class="weather-popup"><h4>'+r.city+"｜"+r.town+'</h4><div class="weather-temp">'+fmt(r.temperature," °C")+'</div><p>💧 濕度：'+fmt(r.humidity," %")+'</p><p>🌧️ 降雨機率：'+fmt(r.pop," %")+'</p><p>💨 風向：'+(r.windDirection||"--")+'</p><p>💨 風速：'+fmt(r.windSpeed," m/s")+'</p><p class="popup-muted">'+(r.weather||"資料待更新")+'</p></div>');
+    weatherMarkers.push(marker);
+  });
+  if(defaults.length){
+    const bounds=L.latLngBounds(defaults.map(r=>[r.latitude,r.longitude]));
+    taiwanMap.fitBounds(bounds.pad(.12));
+  }else{
+    taiwanMap.setView([23.7,121.0],7);
+  }
+  setTimeout(()=>taiwanMap.invalidateSize(),100);
+}
+
 function status(a,b){$("#statusTitle").textContent=a;$("#statusText").textContent=b}
 async function loadWeather(){
   status("正在取得資料…","正在透過網站後端連線至中央氣象署。");$("#refreshBtn").disabled=true;
@@ -187,7 +230,7 @@ async function loadWeather(){
     if(data?.success===false)throw new Error(data?.result?.message||data?.message||"CWA API 回傳錯誤");
     state.rows=parseRows(data);
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
-    loadDefaults();ensureDefaults();summary();renderDefaultCards();
+    loadDefaults();ensureDefaults();summary();renderDefaultCards();renderTaiwanMap();
     $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
   }catch(e){console.error(e);status("取得資料失敗",e.message)}finally{$("#refreshBtn").disabled=false}
