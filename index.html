@@ -68,14 +68,26 @@
     <div><div class="eyebrow">RIDE ROUTE ANALYSIS</div><h2>路線騎乘可行性</h2></div>
   </div>
   <div class="route-controls">
-    <div class="route-field">
-      <label for="routeFrom">📍 從哪裡出發</label>
-      <select id="routeFrom"><option value="">請選擇起點</option></select>
+    <div class="route-field search-field">
+      <label for="routeFromSearch">📍 從哪裡出發</label>
+      <input id="routeFromSearch" type="search" autocomplete="off" placeholder="例如：台中、北屯、台北…">
+      <div id="routeFromSuggestions" class="suggestions hidden"></div>
+      <div id="routeFromTownWrap" class="route-town-wrap hidden">
+        <label for="routeFromTown">選擇起點鄉鎮</label>
+        <select id="routeFromTown"><option value="">請先選擇縣市</option></select>
+      </div>
+      <select id="routeFrom" class="route-value-select hidden" aria-hidden="true"><option value="">請選擇起點</option></select>
     </div>
     <div class="route-arrow">→</div>
-    <div class="route-field">
-      <label for="routeTo">🏁 要到哪裡</label>
-      <select id="routeTo"><option value="">請選擇終點</option></select>
+    <div class="route-field search-field">
+      <label for="routeToSearch">🏁 要到哪裡</label>
+      <input id="routeToSearch" type="search" autocomplete="off" placeholder="例如：高雄、左營、台南…">
+      <div id="routeToSuggestions" class="suggestions hidden"></div>
+      <div id="routeToTownWrap" class="route-town-wrap hidden">
+        <label for="routeToTown">選擇終點鄉鎮</label>
+        <select id="routeToTown"><option value="">請先選擇縣市</option></select>
+      </div>
+      <select id="routeTo" class="route-value-select hidden" aria-hidden="true"><option value="">請選擇終點</option></select>
     </div>
   </div>
   <button id="analyzeRouteBtn" class="primary route-button" type="button">分析這段路的可騎行性</button>
