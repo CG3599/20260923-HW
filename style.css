@@ -122,3 +122,11 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
   margin-top:0;
   padding-bottom:4px;
 }
+
+.route-town-wrap{margin-top:12px}
+.route-town-wrap label{display:block;margin-bottom:6px;font-size:.82rem;color:#94a3b8;font-weight:700}
+.route-town-wrap select{width:100%;padding:11px 12px;border-radius:12px;border:1px solid rgba(148,163,184,.22);background:#0f172a;color:#e2e8f0}
+.route-value-select{display:none!important}
+.route-field .suggestions{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30}
+.route-field{position:relative}
+@media (max-width:760px){.route-arrow{display:none}.route-controls{grid-template-columns:1fr}}
