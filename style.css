@@ -55,3 +55,19 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 .riding-reasons span,.riding-advice span{display:block;color:#8190ad;font-size:.72rem}.riding-reasons strong{display:block;margin-top:2px;color:#dfe7f7;font-size:.8rem}.riding-advice{margin-top:8px;padding-top:8px;border-top:1px solid #293755}.riding-advice p{margin:2px 0 0;color:#b8c7e6;font-size:.76rem;line-height:1.5}
 .decision-panel{background:rgba(13,21,40,.8);border:1px solid #33415f;border-radius:13px;padding:11px 13px;margin-top:10px}.decision-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.decision-head span{color:#8190ad;font-size:.74rem}.decision-action{font-size:.84rem}.decision-execute .decision-action{color:#86efac}.decision-ask .decision-action{color:#fde68a}.decision-wait .decision-action{color:#fda4af}.decision-evidence{margin-top:5px;color:#8190ad;font-size:.68rem;line-height:1.5}
 @media(max-width:560px){.riding-score-row{grid-template-columns:58px 1fr}.score-ring{width:58px;height:58px}}
+
+.score-explanation{margin-top:10px;border:1px solid #293755;border-radius:12px;background:rgba(11,16,32,.72);overflow:hidden}
+.score-explanation summary{cursor:pointer;list-style:none;padding:10px 13px;color:#aeb9d6;font-size:.76rem;font-weight:800;user-select:none}
+.score-explanation summary::-webkit-details-marker{display:none}
+.score-explanation summary:after{content:"＋";float:right;color:#7dd3fc;font-size:.9rem}
+.score-explanation[open] summary{border-bottom:1px solid #293755;color:#dfe7f7}
+.score-explanation[open] summary:after{content:"−"}
+.score-explanation-body{padding:11px 13px;color:#aeb9d6;font-size:.72rem;line-height:1.55}
+.score-explanation-body p{margin:0 0 9px;color:#8190ad}
+.score-rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.score-rule-grid div{padding:8px 9px;background:#0d1528;border-radius:9px}
+.score-rule-grid strong{display:block;color:#dfe7f7;margin-bottom:2px}
+.score-rule-grid span{display:block;color:#8190ad}
+.score-levels{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.score-levels span{padding:4px 7px;border-radius:7px;background:#17213a;color:#b8c7e6}
+@media(max-width:560px){.score-rule-grid{grid-template-columns:1fr}}
