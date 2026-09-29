@@ -181,8 +181,57 @@ function selectRouteSearch(side,m){
 function setupRouteSearch(side){
   const e=routeSearchElements(side); if(!e.input||e.input.dataset.ready)return;
   e.input.dataset.ready="1";
-  e.input.addEventListener("input",()=>renderRouteSuggestions(side));
+  e.input.dataset.index="-1";
+  e.input.addEventListener("input",()=>{e.input.dataset.index="-1";renderRouteSuggestions(side);});
+  e.input.addEventListener("keydown",e2=>handleRouteSearchKeydown(side,e2));
+  e.town.addEventListener("keydown",e2=>{
+    if(e2.key==="Enter"&&e2.target.value){
+      const r=findRouteRow(e2.target.value);
+      if(r){setRouteLocation(side,r);e2.preventDefault();}
+    }
+  });
   e.town.addEventListener("change",()=>{const r=findRouteRow(e.town.value);if(r)setRouteLocation(side,r);});
+}
+function routeSuggestionButtons(side){
+  return [...routeSearchElements(side).suggestions.querySelectorAll(".suggestion")];
+}
+function setRouteSuggestionIndex(side,index){
+  const e=routeSearchElements(side),buttons=routeSuggestionButtons(side);
+  if(!buttons.length)return;
+  const next=Math.max(0,Math.min(index,buttons.length-1));
+  e.input.dataset.index=String(next);
+  buttons.forEach((el,i)=>el.classList.toggle("active",i===next));
+  buttons[next]?.scrollIntoView({block:"nearest"});
+}
+function handleRouteSearchKeydown(side,event){
+  const e=routeSearchElements(side),box=e.suggestions;
+  if(event.key==="Escape"){
+    box.classList.add("hidden");
+    e.input.dataset.index="-1";
+    return;
+  }
+  const buttons=routeSuggestionButtons(side);
+  if(box.classList.contains("hidden")||!buttons.length){
+    if((event.key==="ArrowDown"||event.key==="ArrowUp")&&e.input.value){
+      renderRouteSuggestions(side);
+      event.preventDefault();
+      setRouteSuggestionIndex(side,event.key==="ArrowDown"?0:routeSuggestionButtons(side).length-1);
+    }
+    return;
+  }
+  const current=Number(e.input.dataset.index||"-1");
+  if(event.key==="ArrowDown"){
+    event.preventDefault();
+    setRouteSuggestionIndex(side,current<0?0:current+1);
+  }else if(event.key==="ArrowUp"){
+    event.preventDefault();
+    setRouteSuggestionIndex(side,current<0?buttons.length-1:current-1);
+  }else if(event.key==="Enter"){
+    event.preventDefault();
+    const index=current<0?0:current;
+    const items=buttons[index];
+    if(items)items.click();
+  }
 }
 
 function haversineKm(a,b){
