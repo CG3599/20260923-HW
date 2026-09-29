@@ -23,6 +23,28 @@ function parseRows(data){
     return {...r,riding};
   });
 }
+function buildDecisionSupport(r){
+  const riding=r?.riding||ridingCondition(r);
+  const reasons=riding.reasons||[];
+  let action="EXECUTE";
+  let actionLabel="可出發";
+  let actionIcon="🟢";
+  if(riding.level==="high"){
+    action="WAIT"; actionLabel="建議等待"; actionIcon="🔴";
+  }else if(riding.level==="caution"){
+    action="ASK"; actionLabel="出發前再次確認"; actionIcon="🟠";
+  }else if(riding.level==="normal"){
+    action="ASK"; actionLabel="建議確認天氣"; actionIcon="🟡";
+  }
+  const evidence=[
+    Number.isFinite(r.temperature)?("溫度 "+fmt(r.temperature," °C")):null,
+    Number.isFinite(r.humidity)?("濕度 "+fmt(r.humidity," %")):null,
+    Number.isFinite(r.pop)?("降雨機率 "+fmt(r.pop," %")):null,
+    Number.isFinite(r.windSpeed)?("風速 "+fmt(r.windSpeed," m/s")):null
+  ].filter(Boolean);
+  return {action,actionLabel,actionIcon,score:riding.score,reasons,evidence,advice:riding.advice};
+}
+
 function ridingAdvice(condition){
   const reasons=condition?.reasons||[];
   const level=condition?.level;
@@ -240,6 +262,7 @@ function renderRows(rows,showAll=false){
     n.querySelector(".weather-name").textContent=r.weather;n.querySelector(".humidity").textContent=fmt(r.humidity,"%");n.querySelector(".pop").textContent=fmt(r.pop,"%");
     n.querySelector(".wind-direction").textContent=windArrow(r.windDirection)+" "+(r.windDirection||"--");n.querySelector(".wind-speed").textContent=fmt(r.windSpeed," m/s");
     const riding=r.riding||ridingCondition(r);
+    const decision=buildDecisionSupport(r);
     const levelEl=n.querySelector(".riding-level");
     const panel=n.querySelector(".riding-panel");
     levelEl.textContent=(riding.icon||"")+" "+(riding.label||"資料不足");
@@ -247,6 +270,10 @@ function renderRows(rows,showAll=false){
     n.querySelector(".riding-score-value").textContent=Number.isFinite(riding.score)?riding.score:"--";
     n.querySelector(".riding-reasons-value").textContent=riding.reasons?.length?riding.reasons.join("、"):"目前沒有明顯不利因素";
     n.querySelector(".riding-advice-value").textContent=riding.advice||"請留意最新天氣資訊。";
+    const decisionPanel=n.querySelector(".decision-panel");
+    decisionPanel.className="decision-panel decision-"+decision.action.toLowerCase();
+    n.querySelector(".decision-action").textContent=decision.actionIcon+" "+decision.actionLabel;
+    n.querySelector(".decision-evidence").textContent=decision.evidence.join("、");
     n.querySelector(".forecast-time").textContent=r.start?"預報時間："+new Date(r.start).toLocaleString("zh-TW",{hour12:false}):"預報時間：--";
     check.checked=state.defaultCities.includes(r.city);
     check.addEventListener("change",()=>toggleDefault(r.city,check.checked));
