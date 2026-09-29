@@ -95,3 +95,30 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 .route-evidence div{padding:9px;border-radius:10px;background:#111a30}.route-evidence span{display:block;color:#8190ad;font-size:.68rem}.route-evidence strong{display:block;margin-top:2px;font-size:.82rem}
 .route-reasons{margin-top:10px;color:#aeb9d6;font-size:.75rem}
 @media(max-width:560px){.route-panel{margin-left:0;margin-right:0;border-radius:0}.route-controls{grid-template-columns:1fr}.route-arrow{height:auto}.route-evidence{grid-template-columns:1fr 1fr}}
+
+
+.weather-details-collapse{
+  margin-top:14px;
+  border-top:1px solid rgba(148,163,184,.18);
+}
+.weather-details-collapse summary{
+  cursor:pointer;
+  list-style:none;
+  padding:11px 0 9px;
+  font-size:.9rem;
+  font-weight:700;
+  color:#94a3b8;
+  user-select:none;
+}
+.weather-details-collapse summary::-webkit-details-marker{display:none}
+.weather-details-collapse summary::after{
+  content:"＋";
+  float:right;
+  font-size:1rem;
+  color:#7dd3fc;
+}
+.weather-details-collapse[open] summary::after{content:"−"}
+.weather-details-collapse .details{
+  margin-top:0;
+  padding-bottom:4px;
+}
