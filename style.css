@@ -30,3 +30,13 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 @media(max-width:850px){.weather-grid{grid-template-columns:repeat(2,1fr)}.summary-grid{grid-template-columns:repeat(2,1fr)}.search-controls{grid-template-columns:1fr}.topbar{align-items:start;flex-direction:column}}
 @media(max-width:560px){.weather-grid{grid-template-columns:1fr}.topbar,.status-card{margin-left:0;margin-right:0}.summary-grid{grid-template-columns:1fr 1fr}.section-head{align-items:stretch;flex-direction:column}.status-card{flex-direction:column}.updated{text-align:left}footer{flex-direction:column;gap:8px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+.map-panel{margin:0 24px 36px;background:rgba(18,27,49,.92);border:1px solid #293755;box-shadow:0 8px 24px #0002;border-radius:18px;padding:20px}
+.map-panel .section-head{padding:0 0 14px}
+.map-count{color:#7dd3fc;font-size:.82rem;font-weight:800}
+.taiwan-map{height:620px;border:1px solid #293755;border-radius:14px;overflow:hidden;background:#0d1528}
+.map-hint{color:#8190ad;font-size:.8rem;margin:10px 0 0}
+.leaflet-container{font-family:Inter,"Noto Sans TC",system-ui,sans-serif;background:#0d1528}
+.leaflet-control-zoom a{background:#111a30!important;color:#dfe7f7!important;border-color:#34415e!important}
+.weather-popup{min-width:190px;color:#17213a}.weather-popup h4{margin:0 0 6px;font-size:1rem}.weather-popup p{margin:3px 0;font-size:.8rem}.weather-popup .weather-temp{font-size:1.45rem;font-weight:800;margin-bottom:7px}.weather-popup .popup-muted{color:#65728b}
+@media(max-width:560px){.map-panel{margin-left:0;margin-right:0;border-radius:0}.taiwan-map{height:480px}}
