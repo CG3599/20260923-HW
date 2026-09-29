@@ -47,6 +47,26 @@
   <div id="weatherGrid" class="weather-grid"></div>
 </section>
 
+<section class="route-panel">
+  <div class="section-head">
+    <div><div class="eyebrow">RIDE ROUTE ANALYSIS</div><h2>路線騎乘可行性</h2></div>
+  </div>
+  <div class="route-controls">
+    <div class="route-field">
+      <label for="routeFrom">📍 從哪裡出發</label>
+      <select id="routeFrom"><option value="">請選擇起點</option></select>
+    </div>
+    <div class="route-arrow">→</div>
+    <div class="route-field">
+      <label for="routeTo">🏁 要到哪裡</label>
+      <select id="routeTo"><option value="">請選擇終點</option></select>
+    </div>
+  </div>
+  <button id="analyzeRouteBtn" class="primary route-button" type="button">分析這段路的可騎行性</button>
+  <div id="routeResult" class="route-result hidden"></div>
+  <p class="route-hint">系統會依起點、終點規劃道路路線，並將沿線鄉鎮的天氣條件納入分析。</p>
+</section>
+
 <section class="map-panel">
   <div class="section-head map-head">
     <div><div class="eyebrow">TAIWAN WEATHER MAP</div><h2>台灣氣象地圖</h2></div>
