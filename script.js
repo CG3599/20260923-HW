@@ -311,12 +311,15 @@ async function analyzeRoute(){
     const worst=nearby.reduce((best,x)=>((x.row.riding?.score??ridingCondition(x.row).score)>(best.row.riding?.score??ridingCondition(best.row).score)?x:best),nearby[0]);
     const reasons=[...new Set(conditions.flatMap(c=>c.reasons||[]))];
     const distanceKm=route.distance/1000,durationMin=Math.round(route.duration/60);
+    const rainValues=nearby.map(x=>x.row.pop).filter(Number.isFinite);
+    const maxRain=rainValues.length?Math.max(...rainValues):null;
+    const worstRain=Number.isFinite(worst.row.pop)?worst.row.pop:null;
     box.className="route-result "+routeClass(level.level);
     box.innerHTML=
       '<div class="route-result-head"><div class="route-result-title">'+from.city+"｜"+from.town+" → "+to.city+"｜"+to.town+'</div><strong class="route-result-level">'+level.icon+" "+level.label+'</strong></div>'+
       '<div class="route-score-row"><div class="route-score"><strong>'+maxScore+'</strong><span>最差 Score</span></div><div class="route-summary">依道路路線沿線 '+nearby.length+' 個氣象資料點分析。<br><strong>建議：'+decision.icon+" "+decision.label+'</strong><br>最需注意路段：'+worst.row.city+"｜"+worst.row.town+'</div></div>'+
-      '<div class="route-evidence"><div><span>道路距離</span><strong>'+distanceKm.toFixed(1)+' km</strong></div><div><span>預估車程</span><strong>'+durationMin+' 分鐘</strong></div><div><span>沿線平均 Score</span><strong>'+avgScore.toFixed(1)+'</strong></div></div>'+
-      '<div class="route-reasons">主要因素：'+(reasons.length?reasons.join("、"):"目前沒有明顯不利因素")+'</div>';
+      '<div class="route-evidence"><div><span>道路距離</span><strong>'+distanceKm.toFixed(1)+' km</strong></div><div><span>預估車程</span><strong>'+durationMin+' 分鐘</strong></div><div><span>沿線平均 Score</span><strong>'+avgScore.toFixed(1)+'</strong></div><div><span>最高降雨機率</span><strong>'+(maxRain==null?"--":maxRain+" %")+'</strong></div></div>'+
+      '<div class="route-reasons">主要因素：'+(reasons.length?reasons.join("、"):"目前沒有明顯不利因素")+'<br><span>最需注意路段降雨機率：'+(worstRain==null?"--":worstRain+" %")+'</span></div>';
     if(taiwanMap){
       if(routeLayer)routeLayer.remove();
       routeLayer=L.polyline(coords,{color:"#7dd3fc",weight:5,opacity:.85}).addTo(taiwanMap);
