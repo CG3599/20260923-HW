@@ -1,5 +1,5 @@
 const API_URL="/api/weather";
-const state={rows:[],selectedCity:"",selectedTown:"",selectedDate:"",defaultCities:[],suggestionItems:[],suggestionIndex:-1};
+const state={rows:[],selectedCity:"",selectedTown:"",selectedDate:"",forecastDates:[],defaultCities:[],suggestionItems:[],suggestionIndex:-1};
 const DEFAULT_KEY="weatherDefaultCities";
 const $=s=>document.querySelector(s);
 
@@ -242,12 +242,14 @@ function todayTaiwan(){
   return taiwanDateKey(new Date());
 }
 function availableForecastDates(){
+  if(state.forecastDates.length)return state.forecastDates.slice(0,7);
   const set=new Set();
   state.rows.forEach(r=>(r.forecast||[]).forEach(item=>{
     const key=taiwanDateKey(item.start);
     if(key)set.add(key);
   }));
-  return [...set].sort().slice(0,7);
+  state.forecastDates=[...set].sort().slice(0,7);
+  return state.forecastDates;
 }
 function formatForecastDate(key){
   if(!key)return "";
@@ -851,6 +853,19 @@ async function loadWeather(){
     if(!res.ok)throw new Error(data?.message||data?.result?.message||("HTTP "+res.status));
     if(data?.success===false)throw new Error(data?.result?.message||data?.message||"CWA API 回傳錯誤");
     state.rows=parseRows(data);
+    const metaDates=data?.meta?.minForecastDate&&data?.meta?.maxForecastDate
+      ? (() => {
+          const out=[];
+          const cursor=new Date(data.meta.minForecastDate+"T00:00:00+08:00");
+          const end=new Date(data.meta.maxForecastDate+"T00:00:00+08:00");
+          while(cursor<=end&&out.length<7){
+            out.push(taiwanDateKey(cursor.toISOString()));
+            cursor.setDate(cursor.getDate()+1);
+          }
+          return out;
+        })()
+      : [];
+    state.forecastDates=metaDates.length===7?metaDates:[];
     populateForecastDateSelect();
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
     loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();renderTaiwanMap();
