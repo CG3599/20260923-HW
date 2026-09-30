@@ -1,0 +1,11 @@
+{
+  "name": "ridesky-weather",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-database.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1"
+  }
+}
