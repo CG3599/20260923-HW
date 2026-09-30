@@ -169,9 +169,56 @@ async function main() {
 
   transaction();
   const counts = db.prepare("SELECT (SELECT COUNT(*) FROM locations) AS locations, (SELECT COUNT(*) FROM weather_forecasts) AS forecasts").get();
+
+  // 建置完成後再次使用 SQL 做資料庫層級驗證；任何異常都直接讓 build fail。
+  const validation = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM locations) AS location_count,
+      (SELECT COUNT(*) FROM weather_forecasts) AS forecast_count,
+      (SELECT COUNT(*) FROM locations WHERE city IS NULL OR city = '' OR town IS NULL OR town = '') AS invalid_location_name,
+      (SELECT COUNT(*) FROM locations WHERE latitude NOT BETWEEN 20 AND 27 OR longitude NOT BETWEEN 118 AND 123) AS invalid_coordinates,
+      (SELECT COUNT(*) FROM weather_forecasts WHERE temperature IS NOT NULL AND (temperature < -30 OR temperature > 60)) AS invalid_temperature,
+      (SELECT COUNT(*) FROM weather_forecasts WHERE humidity IS NOT NULL AND (humidity < 0 OR humidity > 100)) AS invalid_humidity,
+      (SELECT COUNT(*) FROM weather_forecasts WHERE precipitation_probability IS NOT NULL AND (precipitation_probability < 0 OR precipitation_probability > 100)) AS invalid_pop,
+      (SELECT COUNT(*) FROM weather_forecasts WHERE wind_speed IS NOT NULL AND (wind_speed < 0 OR wind_speed > 100)) AS invalid_wind,
+      (SELECT COUNT(*) FROM weather_forecasts wf LEFT JOIN locations l ON l.id = wf.location_id WHERE l.id IS NULL) AS orphan_weather,
+      (SELECT COUNT(*) FROM locations l LEFT JOIN weather_forecasts wf ON wf.location_id = l.id GROUP BY l.id HAVING COUNT(wf.id) = 0) AS locations_without_weather
+  `).get();
+
+  const validationPassed =
+    validation.location_count === 368 &&
+    validation.forecast_count > 0 &&
+    validation.invalid_location_name === 0 &&
+    validation.invalid_coordinates === 0 &&
+    validation.invalid_temperature === 0 &&
+    validation.invalid_humidity === 0 &&
+    validation.invalid_pop === 0 &&
+    validation.invalid_wind === 0 &&
+    validation.orphan_weather === 0 &&
+    validation.locations_without_weather === undefined;
+
+  db.prepare(
+    "INSERT INTO ingestion_logs (source,location_count,forecast_count,valid_count,invalid_count,status,message) VALUES (?,?,?,?,?,?,?)"
+  ).run(
+    DATASET,
+    validation.location_count,
+    validation.forecast_count,
+    validationPassed ? validation.forecast_count : 0,
+    validationPassed ? 0 : 1,
+    validationPassed ? "validated" : "validation_failed",
+    JSON.stringify(validation)
+  );
+
   db.close();
 
-  console.log(`SQLite 建立完成：${counts.locations} 個鄉鎮、${counts.forecasts} 筆預報資料。`);
+  console.log("=== SQLite Data Validation ===");
+  console.log(JSON.stringify(validation, null, 2));
+
+  if (!validationPassed) {
+    throw new Error("SQLite SQL 驗證失敗：資料庫未通過完整性檢查。");
+  }
+
+  console.log(`SQLite 建立與驗證完成：${counts.locations} 個鄉鎮、${counts.forecasts} 筆預報資料，Validation: PASS。`);
 }
 
 main().catch(error => {
