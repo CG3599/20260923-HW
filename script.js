@@ -607,6 +607,6 @@ $("#searchInput").addEventListener("input",renderSuggestions);
 $("#searchInput").addEventListener("keydown",handleSearchKeydown);
 $("#townSelect").addEventListener("change",e=>{if(!state.selectedCity)return;if(e.target.value)renderTownResult(state.selectedCity,e.target.value);else renderCityCards(state.selectedCity)});
 $("#clearSearchBtn").addEventListener("click",clearSearch);
-$("#analyzeRouteBtn").addEventListener("click",analyzeRoute);\n$("#weeklyCitySelect")?.addEventListener("change",()=>{renderWeeklyDayOptions();renderWeeklyForecast()});\n$("#weeklyDaySelect")?.addEventListener("change",renderWeeklyForecast);
+$("#analyzeRouteBtn").addEventListener("click",analyzeRoute);
 document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
 window.addEventListener("load",loadWeather);
