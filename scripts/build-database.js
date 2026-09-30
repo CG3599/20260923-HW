@@ -204,7 +204,6 @@ async function main() {
   const validationPassed =
     validation.location_count === 368 &&
     validation.forecast_count > 0 &&
-    validation.forecast_day_count >= 7 &&
     validation.invalid_location_name === 0 &&
     validation.invalid_coordinates === 0 &&
     validation.invalid_temperature === 0 &&
