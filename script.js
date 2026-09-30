@@ -541,6 +541,39 @@ function renderTownResult(city,town){
   $("#searchHint").textContent="目前顯示："+city+"｜"+town+"。選擇其他鄉鎮即可切換。";
 }
 function renderCityCards(city){renderRows([cityRepresentative(city)].filter(Boolean),false);$("#searchHint").textContent="已選擇："+city+"，下方選單可查看該縣市所有鄉鎮。"}
+function renderThreeDayForecast(container,r){
+  container.innerHTML="";
+  const forecast=(r?.forecast||[]).filter(x=>x?.start).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const days=new Map();
+  for(const item of forecast){
+    const d=new Date(item.start);
+    const key=d.toLocaleDateString("zh-TW",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit"});
+    if(!days.has(key))days.set(key,[]);
+    days.get(key).push(item);
+  }
+  [...days.entries()].slice(0,3).forEach(([key,items],index)=>{
+    const temps=items.map(x=>x.temperature).filter(Number.isFinite);
+    const pops=items.map(x=>x.pop).filter(Number.isFinite);
+    const hums=items.map(x=>x.humidity).filter(Number.isFinite);
+    const winds=items.map(x=>x.windSpeed).filter(Number.isFinite);
+    const weather=items.find(x=>x.weather&&x.weather!=="資料待更新")?.weather||"資料待更新";
+    const dateLabel=index===0?"今天":index===1?"明天":"後天";
+    const el=document.createElement("div");
+    el.className="three-day-item";
+    el.innerHTML=
+      '<div class="three-day-head"><strong>'+dateLabel+'</strong><span>'+key+'</span></div>'+
+      '<div class="three-day-weather">'+icon(weather)+' '+weather+'</div>'+
+      '<div class="three-day-values">'+
+        '<span>🌡️ '+(temps.length?Math.min(...temps)+"–"+Math.max(...temps):"--")+' °C</span>'+
+        '<span>🌧️ '+(pops.length?Math.max(...pops):"--")+' %</span>'+
+        '<span>💧 '+(hums.length?(hums.reduce((a,b)=>a+b,0)/hums.length).toFixed(0):"--")+' %</span>'+
+        '<span>💨 '+(winds.length?Math.max(...winds).toFixed(1):"--")+' m/s</span>'+
+      '</div>';
+    container.appendChild(el);
+  });
+  if(!container.children.length)container.innerHTML='<p class="muted">目前沒有可用的三日預報資料。</p>';
+}
+
 function renderRows(rows,showAll=false){
   const g=$("#weatherGrid");g.innerHTML="";
   if(!rows.length){g.innerHTML='<div class="source-card"><strong>沒有符合的資料</strong><p>請重新搜尋或清除選擇。</p></div>';return}
@@ -565,6 +598,7 @@ function renderRows(rows,showAll=false){
     n.querySelector(".decision-action").textContent=decision.actionIcon+" "+decision.actionLabel;
     n.querySelector(".decision-evidence").textContent=decision.evidence.join("、");
     n.querySelector(".forecast-time").textContent=r.start?"預報時間："+new Date(r.start).toLocaleString("zh-TW",{hour12:false}):"預報時間：--";
+    renderThreeDayForecast(n.querySelector(".three-day-forecast"),r);
     check.checked=state.defaultCities.includes(r.city);
     check.addEventListener("change",()=>toggleDefault(r.city,check.checked));
     g.appendChild(n);
