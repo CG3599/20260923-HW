@@ -8,20 +8,43 @@ function num(v){if(v==null||v===""||v==="--"||v==="無資料")return null;const 
 function windArrow(direction=""){const d=String(direction);if(d.includes("北北東")||d.includes("東北"))return"↗️";if(d.includes("東南")||d.includes("南東"))return"↘️";if(d.includes("南西")||d.includes("西南"))return"↙️";if(d.includes("西北")||d.includes("北西"))return"↖️";if(d.includes("東"))return"➡️";if(d.includes("南"))return"⬇️";if(d.includes("西"))return"⬅️";if(d.includes("北"))return"⬆️";return"🧭"}
 
 function parseRows(data){
+  // SQLite API 回傳的是扁平化的 Locations rows；
+  // 舊版 CWA API 則是「縣市 -> Location -> WeatherElement」巢狀格式。
+  if(data?.source==="SQLite"){
+    const groups=data?.records?.Locations||[];
+    return groups.map(r=>{
+      const row={
+        city:r?.city||"未知縣市",
+        town:r?.town||"未知鄉鎮",
+        latitude:num(r?.latitude),
+        longitude:num(r?.longitude),
+        temperature:num(r?.temperature),
+        humidity:num(r?.humidity),
+        pop:num(r?.pop),
+        windDirection:r?.wind_direction??"--",
+        windSpeed:num(r?.wind_speed),
+        weather:r?.weather??"資料待更新",
+        start:r?.forecast_time||""
+      };
+      row.forecast=[{...row}];
+      row.riding=ridingCondition(row);
+      return row;
+    });
+  }
+
+  // 保留舊版 CWA 原始資料格式解析能力。
   const groups=data?.records?.Locations||[],rows=[];
   for(const group of groups){
     const city=group?.LocationsName||"未知縣市";
     for(const l of group?.Location||[]){
       const es=l?.WeatherElement||[];
       const find=(...names)=>es.find(x=>names.includes(x.ElementName));
-      const first=(...names)=>find(...names)?.Time?.[0]?.ElementValue?.[0]||{};
       const temperatureEl=find("溫度","Temperature");
       const humidityEl=find("相對濕度","RelativeHumidity");
       const popEl=find("3小時降雨機率","3小時降雨機率（%）","降雨機率","ProbabilityOfPrecipitation","3-hour ProbabilityOfPrecipitation");
       const windDirectionEl=find("風向","WindDirection");
       const windSpeedEl=find("風速","WindSpeed");
       const weatherEl=find("天氣現象","Weather");
-      const times=new Map();
       const timeKeys=new Set([
         ...(temperatureEl?.Time||[]).map(t=>t.StartTime||t.DataTime).filter(Boolean),
         ...(weatherEl?.Time||[]).map(t=>t.StartTime||t.DataTime).filter(Boolean)
@@ -36,6 +59,7 @@ function parseRows(data){
         }
         return Object.values(v||{})[0];
       };
+      const times=new Map();
       for(const key of timeKeys){
         const tv=valueAt(temperatureEl,key),hv=valueAt(humidityEl,key),pv=valueAt(popEl,key),wv=valueAt(windDirectionEl,key),ws=valueAt(windSpeedEl,key),xv=valueAt(weatherEl,key);
         const r={
@@ -64,7 +88,6 @@ function parseRows(data){
     return {...r,riding};
   });
 }
-
 function buildDecisionSupport(r){
   const riding=r?.riding||ridingCondition(r);
   const reasons=riding.reasons||[];
