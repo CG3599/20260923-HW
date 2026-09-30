@@ -127,8 +127,8 @@ function buildDecisionSupport(r){
   const evidence=[
     Number.isFinite(r.temperature)?("溫度 "+fmt(r.temperature," °C")):null,
     Number.isFinite(r.humidity)?("濕度 "+fmt(r.humidity," %")):null,
-    Number.isFinite(r.pop)?("降雨機率 "+fmt(r.pop," %")):null,
-    Number.isFinite(r.windSpeed)?("風速 "+fmt(r.windSpeed," m/s")):null
+    Number.isFinite(r.pop)?("降雨機率 "+fmt(r.pop," %")):"降雨機率：資料缺失",
+    Number.isFinite(r.windSpeed)?("風速 "+fmt(r.windSpeed," m/s")):"風速：資料缺失"
   ].filter(Boolean);
   return {action,actionLabel,actionIcon,score:riding.score,reasons,evidence,advice:riding.advice};
 }
@@ -159,8 +159,16 @@ function ridingCondition(r){
   const pop=num(r?.pop);
   const humidity=num(r?.humidity);
   const wind=num(r?.windSpeed);
+  const weather=String(r?.weather||"").trim();
+  const weatherRisk=/(雨|陣雨|雷雨|雷陣雨|降雨|飄雨|霧雨|暴雨)/.test(weather);
+  const missing=[];
+  if(!Number.isFinite(temp))missing.push("溫度資料缺失");
+  if(!Number.isFinite(pop))missing.push("降雨機率資料缺失");
+  if(!Number.isFinite(humidity))missing.push("濕度資料缺失");
+  if(!Number.isFinite(wind))missing.push("風速資料缺失");
+  if(!weather||weather==="資料待更新")missing.push("天氣現象資料缺失");
 
-  // 5 分滿分，依不利因素扣分；分數越高代表騎乘條件越穩定。
+  // 5 分滿分；缺失資料絕不視為 0 風險或「良好」。
   let score=5;
   const reasons=[];
 
@@ -168,11 +176,18 @@ function ridingCondition(r){
     if(pop>=70){score-=2;reasons.push("降雨機率高");}
     else if(pop>=40){score-=1;reasons.push("降雨機率偏高");}
     else if(pop>=20){reasons.push("可能有降雨");}
+  }else if(weatherRisk){
+    score-=2;
+    reasons.push("預測含降雨現象，但降雨機率缺失");
+  }else{
+    reasons.push("降雨機率資料缺失");
   }
 
   if(Number.isFinite(wind)){
     if(wind>=7){score-=1;reasons.push(wind>=10?"風速強":"風速偏強");}
     else if(wind>=5){reasons.push("風速較高");}
+  }else{
+    reasons.push("風速資料缺失");
   }
 
   if(Number.isFinite(temp)){
@@ -180,38 +195,40 @@ function ridingCondition(r){
     else if(temp>=32){reasons.push("炎熱");}
     else if(temp<=10){score-=1;reasons.push("低溫");}
     else if(temp<=15){reasons.push("氣溫偏低");}
+  }else{
+    reasons.push("溫度資料缺失");
   }
 
   if(Number.isFinite(humidity)&&humidity>=90){
     score-=1;
     reasons.push("濕度高");
+  }else if(!Number.isFinite(humidity)){
+    reasons.push("濕度資料缺失");
   }
 
   score=Math.max(0,Math.min(5,score));
 
-  let level="good";
-  let label="良好";
-  let icon="🟢";
+  let level="good",label="良好",icon="🟢";
+  if(score<=1){level="high";label="高風險";icon="🔴";}
+  else if(score===2){level="caution";label="需注意";icon="🟠";}
+  else if(score===3){level="normal";label="普通";icon="🟡";}
 
-  if(score<=1){
-    level="high";
-    label="高風險";
-    icon="🔴";
-  }else if(score===2){
-    level="caution";
-    label="需注意";
-    icon="🟠";
-  }else if(score===3){
-    level="normal";
-    label="普通";
-    icon="🟡";
+  const incomplete=missing.length>0;
+  if(incomplete){
+    label="資料不足";
+    level=score<=1?"high":score<=2?"caution":"normal";
+    icon=level==="high"?"🔴":level==="caution"?"🟠":"🟡";
+    reasons.push("部分氣象資料缺失，無法完整評估");
   }
 
-  const condition={score,level,label,icon,reasons};
-  condition.advice=ridingAdvice(condition);
+  const condition={score,level,label,icon,reasons,missing,incomplete,weatherRisk};
+  condition.advice=incomplete
+    ? (weatherRisk&&!Number.isFinite(pop)
+      ? "預測包含降雨現象，但降雨機率資料缺失，無法完整判斷；建議出發前再次確認最新預報。"
+      : "部分關鍵氣象資料缺失，無法完整評估騎乘條件；建議出發前再次確認最新預報。")
+    : ridingAdvice(condition);
   return condition;
 }
-
 function ridingLevel(score){
   if(score<=1)return {level:"high",label:"高風險",icon:"🔴"};
   if(score===2)return {level:"caution",label:"需注意",icon:"🟠"};
@@ -593,11 +610,13 @@ function forecastDays(r){
     const pops=items.map(x=>x.pop).filter(Number.isFinite);
     const hums=items.map(x=>x.humidity).filter(Number.isFinite);
     const winds=items.map(x=>x.windSpeed).filter(Number.isFinite);
+    const representativeWeather=items.find(x=>x.weather&&x.weather!=="資料待更新")?.weather||"資料待更新";
     const riding=ridingCondition({
       temperature:temps.length?temps.reduce((a,b)=>a+b,0)/temps.length:null,
       humidity:hums.length?hums.reduce((a,b)=>a+b,0)/hums.length:null,
       pop:pops.length?Math.max(...pops):null,
-      windSpeed:winds.length?Math.max(...winds):null
+      windSpeed:winds.length?Math.max(...winds):null,
+      weather:representativeWeather
     });
     return {
       key,items,index,
