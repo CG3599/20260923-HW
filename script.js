@@ -11,9 +11,20 @@ function parseRows(data){
   // SQLite API 回傳的是扁平化的 Locations rows；
   // 舊版 CWA API 則是「縣市 -> Location -> WeatherElement」巢狀格式。
   if(data?.source==="SQLite"){
-    const groups=data?.records?.Locations||[];
-    return groups.map(r=>{
-      const row={
+    const records=data?.records?.Locations||[];
+    const groups=new Map();
+    for(const r of records){
+      const key=(r?.city||"未知縣市")+"||"+(r?.town||"未知鄉鎮");
+      if(!groups.has(key)){
+        groups.set(key,{
+          city:r?.city||"未知縣市",
+          town:r?.town||"未知鄉鎮",
+          latitude:num(r?.latitude),
+          longitude:num(r?.longitude),
+          forecast:[]
+        });
+      }
+      groups.get(key).forecast.push({
         city:r?.city||"未知縣市",
         town:r?.town||"未知鄉鎮",
         latitude:num(r?.latitude),
@@ -25,13 +36,25 @@ function parseRows(data){
         windSpeed:num(r?.wind_speed),
         weather:r?.weather??"資料待更新",
         start:r?.forecast_time||""
+      });
+    }
+    return [...groups.values()].map(g=>{
+      g.forecast.sort((a,b)=>new Date(a.start)-new Date(b.start));
+      const now=Date.now();
+      const current=g.forecast.reduce((best,r)=>{
+        if(!best)return r;
+        return Math.abs(new Date(r.start)-now)<Math.abs(new Date(best.start)-now)?r:best;
+      },g.forecast[0]||null);
+      const row=current||{
+        city:g.city,town:g.town,latitude:g.latitude,longitude:g.longitude,
+        temperature:null,humidity:null,pop:null,windDirection:"--",windSpeed:null,weather:"資料待更新",start:""
       };
-      row.forecast=[{...row}];
-      row.riding=ridingCondition(row);
-      return row;
+      row.forecast=g.forecast;
+      row.city=g.city; row.town=g.town; row.latitude=g.latitude; row.longitude=g.longitude;
+      const riding=ridingCondition(row);
+      return {...row,riding};
     });
   }
-
   // 保留舊版 CWA 原始資料格式解析能力。
   const groups=data?.records?.Locations||[],rows=[];
   for(const group of groups){
