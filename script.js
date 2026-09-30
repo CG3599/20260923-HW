@@ -434,11 +434,18 @@ async function analyzeRoute(){
     const conditions=nearby.map(x=>x.row.riding||ridingCondition(x.row)).filter(c=>Number.isFinite(c.score));
     const routePoints=nearby;
     if(!conditions.length)throw new Error("沿線沒有足夠的氣象資料可供分析。");
-    const maxScore=Math.max(...conditions.map(c=>c.score));
+    // 路線採用「最弱點」：分數越低代表風險越高，不能用最高分判斷整條路線。
+    const minScore=Math.min(...conditions.map(c=>c.score));
     const avgScore=conditions.reduce((a,c)=>a+c.score,0)/conditions.length;
-    const level=routeLevel(maxScore),decision=routeDecision(level.level);
-    const worst=nearby.reduce((best,x)=>((x.row.riding?.score??ridingCondition(x.row).score)>(best.row.riding?.score??ridingCondition(best.row).score)?x:best),nearby[0]);
+    const incompleteCount=conditions.filter(c=>c.incomplete).length;
+    const level=routeLevel(minScore),decision=routeDecision(level.level);
+    const worst=nearby.reduce((best,x)=>{
+      const bestScore=best.row.riding?.score??ridingCondition(best.row).score;
+      const currentScore=x.row.riding?.score??ridingCondition(x.row).score;
+      return currentScore<bestScore?x:best;
+    },nearby[0]);
     const reasons=[...new Set(conditions.flatMap(c=>c.reasons||[]))];
+    if(incompleteCount)reasons.push("沿線有 "+incompleteCount+" 個氣象點資料不足");
     const distanceKm=route.distance/1000,durationMin=Math.round(route.duration/60);
     const rainValues=nearby.map(x=>x.row.pop).filter(Number.isFinite);
     const maxRain=rainValues.length?Math.max(...rainValues):null;
