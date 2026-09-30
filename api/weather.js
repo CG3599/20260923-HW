@@ -33,25 +33,30 @@ export default async function handler(req, res) {
         wf.wind_speed
       FROM weather_forecasts wf
       JOIN locations l ON l.id = wf.location_id
-      WHERE wf.forecast_time >= (
-          SELECT date(MAX(forecast_time), '-6 days')
+      WHERE date(wf.forecast_time, '+8 hours') >= (
+          SELECT date(MAX(forecast_time, '+8 hours'), '-6 days')
           FROM weather_forecasts
         )
-        AND wf.forecast_time < (
-          SELECT date(MAX(forecast_time), '+1 day')
+        AND date(wf.forecast_time, '+8 hours') < (
+          SELECT date(MAX(forecast_time, '+8 hours'), '+1 day')
           FROM weather_forecasts
         )
       ORDER BY l.city, l.town, wf.forecast_time
     `).all();
 
     const validation = db.prepare(`
-      SELECT (SELECT COUNT(*) FROM locations) AS location_count,
-             (SELECT COUNT(*) FROM weather_forecasts) AS forecast_count
+      SELECT
+        (SELECT COUNT(*) FROM locations) AS location_count,
+        (SELECT COUNT(*) FROM weather_forecasts) AS forecast_count,
+        (SELECT COUNT(DISTINCT date(forecast_time, '+8 hours')) FROM weather_forecasts) AS forecast_day_count,
+        (SELECT MIN(date(forecast_time, '+8 hours')) FROM weather_forecasts) AS min_forecast_date,
+        (SELECT MAX(date(forecast_time, '+8 hours')) FROM weather_forecasts) AS max_forecast_date
     `).get();
 
     if (
       validation.location_count !== 368 ||
-      validation.forecast_count === 0
+      validation.forecast_count === 0 ||
+      validation.forecast_day_count < 7
     ) {
       return res.status(500).json({
         success: false,
@@ -65,7 +70,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       source: "SQLite",
-      sql: "weather_forecasts JOIN locations + 以最新預報日期為基準取得完整 7 個日曆日",
+      sql: "weather_forecasts JOIN locations + 以台灣時區最新預報日期為基準取得完整 7 個日曆日",
       records: {
         Locations: rows
       },
