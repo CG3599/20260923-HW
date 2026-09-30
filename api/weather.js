@@ -17,8 +17,8 @@ export default async function handler(req, res) {
     db = new Database(dbPath, { readonly: true, fileMustExist: true });
     db.pragma("foreign_keys = ON");
 
-    // 取得「現在起 7 天」的完整預報資料；前端會依鄉鎮分組並顯示每日摘要。
-    const rows = db.prepare(`
+    // SQLite 只負責提供資料；7 日日期切分由 Node.js 以台灣 UTC+8 明確處理，避免 SQLite 時區函式在部署環境產生差異。
+    const allRows = db.prepare(`
       SELECT
         l.city,
         l.town,
@@ -33,33 +33,50 @@ export default async function handler(req, res) {
         wf.wind_speed
       FROM weather_forecasts wf
       JOIN locations l ON l.id = wf.location_id
-      WHERE date(wf.forecast_time, '+8 hours') >= (
-          SELECT date(datetime(MAX(forecast_time), '+8 hours'), '-6 days')
-          FROM weather_forecasts
-        )
-        AND date(wf.forecast_time, '+8 hours') < (
-          SELECT date(datetime(MAX(forecast_time), '+8 hours'), '+1 day')
-          FROM weather_forecasts
-        )
       ORDER BY l.city, l.town, wf.forecast_time
     `).all();
 
-    const validation = db.prepare(`
-      SELECT
-        (SELECT COUNT(*) FROM locations) AS location_count,
-        (SELECT COUNT(*) FROM weather_forecasts) AS forecast_count,
-        (SELECT COUNT(DISTINCT date(forecast_time, '+8 hours')) FROM weather_forecasts) AS forecast_day_count,
-        (SELECT MIN(date(forecast_time, '+8 hours')) FROM weather_forecasts) AS min_forecast_date,
-        (SELECT MAX(date(forecast_time, '+8 hours')) FROM weather_forecasts) AS max_forecast_date
-    `).get();
+    const taiwanDate = value => {
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Taipei",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).format(d);
+    };
 
-    if (
-      validation.location_count !== 368 ||
-      validation.forecast_count === 0 ||
-    ) {
+    const dates = [...new Set(allRows.map(row => taiwanDate(row.forecast_time)).filter(Boolean))].sort();
+    if (dates.length < 7) {
       return res.status(500).json({
         success: false,
-        message: "SQLite 資料驗證失敗",
+        message: "SQLite 預報資料不足 7 天",
+        validation: {
+          location_count: new Set(allRows.map(row => row.city + "||" + row.town)).size,
+          forecast_count: allRows.length,
+          forecast_day_count: dates.length,
+          min_forecast_date: dates[0] || null,
+          max_forecast_date: dates[dates.length - 1] || null
+        }
+      });
+    }
+
+    const selectedDates = new Set(dates.slice(-7));
+    const rows = allRows.filter(row => selectedDates.has(taiwanDate(row.forecast_time)));
+
+    const validation = {
+      location_count: new Set(rows.map(row => row.city + "||" + row.town)).size,
+      forecast_count: rows.length,
+      forecast_day_count: new Set(rows.map(row => taiwanDate(row.forecast_time)).filter(Boolean)).size,
+      min_forecast_date: [...selectedDates].sort()[0] || null,
+      max_forecast_date: [...selectedDates].sort().at(-1) || null
+    };
+
+    if (validation.location_count !== 368 || validation.forecast_count === 0 || validation.forecast_day_count !== 7) {
+      return res.status(500).json({
+        success: false,
+        message: "SQLite 7 日資料驗證失敗",
         validation
       });
     }
