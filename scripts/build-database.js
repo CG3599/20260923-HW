@@ -59,18 +59,31 @@ async function fetchBatch(batch) {
   url.searchParams.set("Authorization", API_KEY);
   url.searchParams.set("format", "JSON");
 
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
-  const text = await response.text();
-  let body = null;
-  try { body = JSON.parse(text); } catch (_) {}
+  let lastError;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { Accept: "application/json" } });
+      const text = await response.text();
+      let body = null;
+      try { body = JSON.parse(text); } catch (_) {}
 
-  if (!response.ok) {
-    throw new Error(body?.message || body?.result?.message || `CWA API HTTP ${response.status}`);
+      if (!response.ok) {
+        throw new Error(body?.message || body?.result?.message || `CWA API HTTP ${response.status}`);
+      }
+      if (!body?.records?.Locations) {
+        throw new Error("CWA API 回傳內容缺少 Locations");
+      }
+      return body.records.Locations;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 4) {
+        const delay = attempt * 2000;
+        console.warn(`CWA API 連線失敗，第 ${attempt} 次重試，${delay}ms 後再試：`, error.message);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
   }
-  if (!body?.records?.Locations) {
-    throw new Error("CWA API 回傳內容缺少 Locations");
-  }
-  return body.records.Locations;
+  throw lastError;
 }
 
 function parseLocations(groups) {
