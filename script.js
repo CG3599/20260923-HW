@@ -680,7 +680,21 @@ async function loadWeather(){
     loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();renderTaiwanMap();
     $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
-  }catch(e){console.error(e);status("取得資料失敗",e.message)}finally{$("#refreshBtn").disabled=false;$("#refreshBtn").textContent="重新取得資料"}
+    const button=$("#refreshBtn");
+    button.disabled=true;
+    button.textContent="取得成功 ✓";
+    clearTimeout(window.__refreshButtonTimer);
+    window.__refreshButtonTimer=setTimeout(()=>{
+      button.disabled=false;
+      button.textContent="重新取得資料";
+    },5000);
+  }catch(e){
+    console.error(e);
+    status("取得資料失敗",e.message);
+    const button=$("#refreshBtn");
+    button.disabled=false;
+    button.textContent="重新取得資料";
+  }
 }
 $("#refreshBtn").addEventListener("click",loadWeather);
 $("#searchInput").addEventListener("input",renderSuggestions);
