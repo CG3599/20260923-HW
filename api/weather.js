@@ -17,46 +17,25 @@ export default async function handler(req, res) {
     db = new Database(dbPath, { readonly: true, fileMustExist: true });
     db.pragma("foreign_keys = ON");
 
-    // 使用 SQL 取每個鄉鎮最接近目前時間的預報資料。
+    // 取得「現在起 3 天」的完整預報資料；前端會依鄉鎮分組並顯示每日摘要。
     const rows = db.prepare(`
-      WITH ranked AS (
-        SELECT
-          l.city,
-          l.town,
-          l.latitude,
-          l.longitude,
-          wf.forecast_time,
-          wf.temperature,
-          wf.humidity,
-          wf.precipitation_probability AS pop,
-          wf.weather,
-          wf.wind_direction,
-          wf.wind_speed,
-          ROW_NUMBER() OVER (
-            PARTITION BY wf.location_id
-            ORDER BY ABS(
-              julianday(wf.forecast_time) -
-              julianday(datetime('now', '+8 hours'))
-            )
-          ) AS rn
-        FROM weather_forecasts wf
-        JOIN locations l ON l.id = wf.location_id
-      )
       SELECT
-        city,
-        town,
-        latitude,
-        longitude,
-        forecast_time,
-        temperature,
-        humidity,
-        pop,
-        weather,
-        wind_direction,
-        wind_speed
-      FROM ranked
-      WHERE rn = 1
-      ORDER BY city, town
+        l.city,
+        l.town,
+        l.latitude,
+        l.longitude,
+        wf.forecast_time,
+        wf.temperature,
+        wf.humidity,
+        wf.precipitation_probability AS pop,
+        wf.weather,
+        wf.wind_direction,
+        wf.wind_speed
+      FROM weather_forecasts wf
+      JOIN locations l ON l.id = wf.location_id
+      WHERE wf.forecast_time >= datetime('now', '+8 hours')
+        AND wf.forecast_time < datetime('now', '+8 hours', '+3 days')
+      ORDER BY l.city, l.town, wf.forecast_time
     `).all();
 
     const validation = db.prepare(`
@@ -96,7 +75,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       source: "SQLite",
-      sql: "weather_forecasts JOIN locations + ROW_NUMBER() 取得最接近目前時間的預報",
+      sql: "weather_forecasts JOIN locations + 取得現在起 3 天完整預報",
       records: {
         Locations: rows
       },
