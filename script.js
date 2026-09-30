@@ -627,7 +627,19 @@ function bindForecastCollapse(details){
   if(!details)return;
   details.addEventListener("toggle",()=>{
     const card=details.closest(".weather-card");
-    if(card)card.classList.toggle("forecast-expanded",details.open);
+    if(!card)return;
+    card.classList.toggle("forecast-expanded",details.open);
+    if(details.open){
+      requestAnimationFrame(()=>{
+        const charts=details.querySelectorAll(".forecast-chart");
+        charts.forEach((chart,i)=>{
+          chart.style.animation="none";
+          void chart.offsetWidth;
+          chart.style.animation="";
+          chart.style.animationDelay=(i*70)+"ms";
+        });
+      });
+    }
   });
 }
 function renderRows(rows,showAll=false){
