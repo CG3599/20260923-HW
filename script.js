@@ -593,7 +593,24 @@ function forecastDays(r){
     const pops=items.map(x=>x.pop).filter(Number.isFinite);
     const hums=items.map(x=>x.humidity).filter(Number.isFinite);
     const winds=items.map(x=>x.windSpeed).filter(Number.isFinite);
-    return {key,items,index,dateLabel:index===0?"今天":index===1?"明天":index===2?"後天":`第${index+1}天`,temp:temps.length?temps.reduce((a,b)=>a+b,0)/temps.length:null,minTemp:temps.length?Math.min(...temps):null,maxTemp:temps.length?Math.max(...temps):null,pop:pops.length?Math.max(...pops):null,humidity:hums.length?hums.reduce((a,b)=>a+b,0)/hums.length:null,wind:winds.length?Math.max(...winds):null,weather:items.find(x=>x.weather&&x.weather!=="資料待更新")?.weather||"資料待更新"};
+    const riding=ridingCondition({
+      temperature:temps.length?temps.reduce((a,b)=>a+b,0)/temps.length:null,
+      humidity:hums.length?hums.reduce((a,b)=>a+b,0)/hums.length:null,
+      pop:pops.length?Math.max(...pops):null,
+      windSpeed:winds.length?Math.max(...winds):null
+    });
+    return {
+      key,items,index,
+      dateLabel:index===0?"今天":index===1?"明天":index===2?"後天":`第${index+1}天`,
+      temp:temps.length?temps.reduce((a,b)=>a+b,0)/temps.length:null,
+      minTemp:temps.length?Math.min(...temps):null,
+      maxTemp:temps.length?Math.max(...temps):null,
+      pop:pops.length?Math.max(...pops):null,
+      humidity:hums.length?hums.reduce((a,b)=>a+b,0)/hums.length:null,
+      wind:winds.length?Math.max(...winds):null,
+      weather:items.find(x=>x.weather&&x.weather!=="資料待更新")?.weather||"資料待更新",
+      riding
+    };
   });
 }
 function buildLineChart(days,type){
@@ -620,7 +637,7 @@ function renderThreeDayForecast(container,r){
   const days=forecastDays(r);
   if(!days.length){container.innerHTML='<p class="muted">目前沒有可用的 7 日預報資料。</p>';return;}
   container.innerHTML='<div class="forecast-charts">'+buildLineChart(days,"temp")+buildLineChart(days,"pop")+'</div><div class="forecast-day-list">'+
-    days.map(d=>'<div class="three-day-item"><div class="three-day-head"><strong>'+d.dateLabel+'</strong><span>'+d.key+'</span></div><div class="three-day-weather">'+icon(d.weather)+' '+d.weather+'</div><div class="three-day-values"><span>🌡️ '+(d.minTemp!=null?d.minTemp+"–"+d.maxTemp:"--")+' °C</span><span>🌧️ 降雨機率 '+(d.pop!=null?d.pop:"--")+' %</span><span>💧 濕度 '+(d.humidity!=null?d.humidity.toFixed(0):"--")+' %</span><span>💨 最高風速 '+(d.wind!=null?d.wind.toFixed(1):"--")+' m/s</span></div></div>').join("")+
+    days.map(d=>'<div class="three-day-item '+(d.riding?.level||"good")+'"><div class="three-day-head"><strong>'+d.dateLabel+'</strong><span>'+d.key+'</span></div><div class="three-day-weather">'+icon(d.weather)+' '+d.weather+'</div><div class="three-day-values"><span>🌡️ '+(d.minTemp!=null?d.minTemp+"–"+d.maxTemp:"--")+' °C</span><span>🌧️ 降雨機率 '+(d.pop!=null?d.pop:"--")+' %</span><span>💧 濕度 '+(d.humidity!=null?d.humidity.toFixed(0):"--")+' %</span><span>💨 最高風速 '+(d.wind!=null?d.wind.toFixed(1):"--")+' m/s</span></div><div class="three-day-riding"><span>🏍️ 騎乘條件</span><strong>'+((d.riding?.icon)||"")+" "+((d.riding?.label)||"資料不足")+' · '+(Number.isFinite(d.riding?.score)?d.riding.score:"--")+' / 5</strong></div><div class="three-day-riding-reasons">'+(d.riding?.reasons?.length?d.riding.reasons.join("、"):"目前沒有明顯不利因素")+'</div></div>').join("")+
     '</div>';
 }
 function bindForecastCollapse(details){
