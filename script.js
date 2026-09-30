@@ -15,7 +15,48 @@ function parseRows(data){
       const es=l?.WeatherElement||[];
       const find=(...names)=>es.find(x=>names.includes(x.ElementName));
       const first=(...names)=>find(...names)?.Time?.[0]?.ElementValue?.[0]||{};
-      rows.push({city,town:l?.LocationName||"未知鄉鎮",latitude:num(l?.Latitude),longitude:num(l?.Longitude),temperature:num(first("溫度","Temperature").Temperature),humidity:num(first("相對濕度","RelativeHumidity").RelativeHumidity),pop:num((()=>{const v=first("3小時降雨機率","3小時降雨機率（%）","降雨機率","ProbabilityOfPrecipitation","3-hour ProbabilityOfPrecipitation");return v.ProbabilityOfPrecipitation??v["3小時降雨機率"]??v["3小時降雨機率（%）"]??Object.values(v)[0]})()),windDirection:first("風向","WindDirection").WindDirection??"--",windSpeed:num(first("風速","WindSpeed").WindSpeed),weather:first("天氣現象","Weather").Weather??"資料待更新",start:find("溫度","Temperature")?.Time?.[0]?.StartTime||find("溫度","Temperature")?.Time?.[0]?.DataTime||""});
+      const temperatureEl=find("溫度","Temperature");
+      const humidityEl=find("相對濕度","RelativeHumidity");
+      const popEl=find("3小時降雨機率","3小時降雨機率（%）","降雨機率","ProbabilityOfPrecipitation","3-hour ProbabilityOfPrecipitation");
+      const windDirectionEl=find("風向","WindDirection");
+      const windSpeedEl=find("風速","WindSpeed");
+      const weatherEl=find("天氣現象","Weather");
+      const times=new Map();
+      const timeKeys=new Set([
+        ...(temperatureEl?.Time||[]).map(t=>t.StartTime||t.DataTime).filter(Boolean),
+        ...(weatherEl?.Time||[]).map(t=>t.StartTime||t.DataTime).filter(Boolean)
+      ]);
+      const valueAt=(element,key)=>{
+        const item=(element?.Time||[]).find(t=>(t.StartTime||t.DataTime)===key);
+        return item?.ElementValue?.[0]||{};
+      };
+      const valueFrom=(v,names)=>{
+        for(const name of names){
+          if(v?.[name]!=null)return v[name];
+        }
+        return Object.values(v||{})[0];
+      };
+      for(const key of timeKeys){
+        const tv=valueAt(temperatureEl,key),hv=valueAt(humidityEl,key),pv=valueAt(popEl,key),wv=valueAt(windDirectionEl,key),ws=valueAt(windSpeedEl,key),xv=valueAt(weatherEl,key);
+        const r={
+          city,town:l?.LocationName||"未知鄉鎮",latitude:num(l?.Latitude),longitude:num(l?.Longitude),
+          temperature:num(valueFrom(tv,["溫度","Temperature"])),
+          humidity:num(valueFrom(hv,["相對濕度","RelativeHumidity"])),
+          pop:num(valueFrom(pv,["ProbabilityOfPrecipitation","3小時降雨機率","3小時降雨機率（%）"])),
+          windDirection:valueFrom(wv,["風向","WindDirection"])??"--",
+          windSpeed:num(valueFrom(ws,["風速","WindSpeed"])),
+          weather:valueFrom(xv,["天氣現象","Weather"])??"資料待更新",
+          start:key
+        };
+        times.set(key,r);
+      }
+      const forecast=[...times.values()].sort((a,b)=>new Date(a.start)-new Date(b.start));
+      const current=forecast[0]||{
+        city,town:l?.LocationName||"未知鄉鎮",latitude:num(l?.Latitude),longitude:num(l?.Longitude),
+        temperature:null,humidity:null,pop:null,windDirection:"--",windSpeed:null,weather:"資料待更新",start:""
+      };
+      current.forecast=forecast;
+      rows.push(current);
     }
   }
   return rows.map(r=>{
@@ -23,6 +64,7 @@ function parseRows(data){
     return {...r,riding};
   });
 }
+
 function buildDecisionSupport(r){
   const riding=r?.riding||ridingCondition(r);
   const reasons=riding.reasons||[];
