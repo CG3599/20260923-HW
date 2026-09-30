@@ -182,7 +182,7 @@ async function main() {
       (SELECT COUNT(*) FROM weather_forecasts WHERE precipitation_probability IS NOT NULL AND (precipitation_probability < 0 OR precipitation_probability > 100)) AS invalid_pop,
       (SELECT COUNT(*) FROM weather_forecasts WHERE wind_speed IS NOT NULL AND (wind_speed < 0 OR wind_speed > 100)) AS invalid_wind,
       (SELECT COUNT(*) FROM weather_forecasts wf LEFT JOIN locations l ON l.id = wf.location_id WHERE l.id IS NULL) AS orphan_weather,
-      (SELECT COUNT(*) FROM locations l LEFT JOIN weather_forecasts wf ON wf.location_id = l.id GROUP BY l.id HAVING COUNT(wf.id) = 0) AS locations_without_weather
+      (SELECT COUNT(*) FROM locations l WHERE NOT EXISTS (SELECT 1 FROM weather_forecasts wf WHERE wf.location_id = l.id)) AS locations_without_weather
   `).get();
 
   const validationPassed =
@@ -195,7 +195,7 @@ async function main() {
     validation.invalid_pop === 0 &&
     validation.invalid_wind === 0 &&
     validation.orphan_weather === 0 &&
-    validation.locations_without_weather === undefined;
+    validation.locations_without_weather === 0;
 
   db.prepare(
     "INSERT INTO ingestion_logs (source,location_count,forecast_count,valid_count,invalid_count,status,message) VALUES (?,?,?,?,?,?,?)"
