@@ -379,21 +379,7 @@ function nearestWeatherRow(lat,lon){
   return best?{row:best,distance:bestDistance}:null;
 }
 function routeClass(level){return level==="high"?"route-high":level==="caution"?"route-caution":level==="normal"?"route-normal":"route-good"}
-async function clearRouteAnalysis(){
-  const from=routeSearchElements("from"),to=routeSearchElements("to");
-  [from,to].forEach(e=>{
-    if(e.input)e.input.value="";
-    if(e.value)e.value.value="";
-    if(e.input){delete e.input.dataset.city;delete e.input.dataset.mode;delete e.input.dataset.index;}
-    if(e.townWrap)e.townWrap.classList.add("hidden");
-    if(e.suggestions)e.suggestions.classList.add("hidden");
-    if(e.town)e.town.innerHTML='<option value="">請先選擇縣市</option>';
-  });
-  const box=$("#routeResult");
-  if(box){box.className="route-result hidden";box.innerHTML="";}
-  if(routeLayer&&taiwanMap){routeLayer.remove();routeLayer=null;}
-}
-function analyzeRoute(){
+async function analyzeRoute(){
   const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
   if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return}
   if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return}
@@ -721,13 +707,7 @@ async function loadWeather(){
   statusEl.textContent="取得資料中......";
   statusEl.classList.remove("is-success");
   try{
-    const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),20000);
-    let res,data;
-    try{
-      res=await fetch(API_URL,{cache:"no-store",signal:controller.signal});
-      data=await res.json().catch(()=>null);
-    }finally{ clearTimeout(timeout); }
+    const res=await fetch(API_URL),data=await res.json().catch(()=>null);
     if(!res.ok)throw new Error(data?.message||data?.result?.message||("HTTP "+res.status));
     if(data?.success===false)throw new Error(data?.result?.message||data?.message||"CWA API 回傳錯誤");
     state.rows=parseRows(data);
@@ -748,42 +728,24 @@ async function loadWeather(){
     },5000);
   }catch(e){
     console.error(e);
-    const message=e?.name==="AbortError"?"網站後端回應逾時，請稍後再按「重新取得資料」。":(e?.message||"未知錯誤");
-    status("取得資料失敗",message);
+    status("取得資料失敗",e.message);
     statusEl.textContent="取得失敗";
     statusEl.classList.remove("is-success");
     actionEl.disabled=false;
     actionEl.textContent="重新取得資料";
   }
 }
-const refreshAction=$("#refreshAction");
-if(refreshAction)refreshAction.addEventListener("click",loadWeather);
-const searchInput=$("#searchInput");
-if(searchInput){
-  searchInput.addEventListener("input",renderSuggestions);
-  searchInput.addEventListener("keydown",handleSearchKeydown);
-}
-const townSelect=$("#townSelect");
-if(townSelect)townSelect.addEventListener("change",e=>{
+$("#refreshAction").addEventListener("click",loadWeather);
+$("#searchInput").addEventListener("input",renderSuggestions);
+$("#searchInput").addEventListener("keydown",handleSearchKeydown);
+$("#townSelect").addEventListener("change",e=>{
   if(!state.selectedCity)return;
   if(e.target.value){
     renderTownResult(state.selectedCity,e.target.value);
     openDefaultCities();
   }else renderCityCards(state.selectedCity);
 });
-const clearSearchBtn=$("#clearSearchBtn");
-if(clearSearchBtn)clearSearchBtn.addEventListener("click",clearSearch);
-const analyzeRouteBtn=$("#analyzeRouteBtn");
-if(analyzeRouteBtn)analyzeRouteBtn.addEventListener("click",analyzeRoute);
-const clearRouteBtn=$("#clearRouteBtn");
-if(clearRouteBtn)clearRouteBtn.addEventListener("click",clearRouteAnalysis);
-document.addEventListener("click",e=>{if(!e.target.closest(".search-field")){const suggestions=$("#suggestions");if(suggestions)suggestions.classList.add("hidden")}});
-window.addEventListener("load",()=>{
-  const statusTitle=$("#statusTitle");
-  const statusText=$("#statusText");
-  const refreshStatus=$("#refreshStatus");
-  if(statusTitle)statusTitle.textContent="正在取得氣象資料";
-  if(statusText)statusText.textContent="正在從網站後端讀取 SQLite 氣象資料。";
-  if(refreshStatus)refreshStatus.textContent="取得資料中......";
-  loadWeather();
-});
+$("#clearSearchBtn").addEventListener("click",clearSearch);
+$("#analyzeRouteBtn").addEventListener("click",analyzeRoute);
+document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
+window.addEventListener("load",loadWeather);
