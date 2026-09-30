@@ -721,7 +721,13 @@ async function loadWeather(){
   statusEl.textContent="取得資料中......";
   statusEl.classList.remove("is-success");
   try{
-    const res=await fetch(API_URL),data=await res.json().catch(()=>null);
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),20000);
+    let res,data;
+    try{
+      res=await fetch(API_URL,{cache:"no-store",signal:controller.signal});
+      data=await res.json().catch(()=>null);
+    }finally{ clearTimeout(timeout); }
     if(!res.ok)throw new Error(data?.message||data?.result?.message||("HTTP "+res.status));
     if(data?.success===false)throw new Error(data?.result?.message||data?.message||"CWA API 回傳錯誤");
     state.rows=parseRows(data);
@@ -742,7 +748,8 @@ async function loadWeather(){
     },5000);
   }catch(e){
     console.error(e);
-    status("取得資料失敗",e.message);
+    const message=e?.name==="AbortError"?"網站後端回應逾時，請稍後再按「重新取得資料」。":(e?.message||"未知錯誤");
+    status("取得資料失敗",message);
     statusEl.textContent="取得失敗";
     statusEl.classList.remove("is-success");
     actionEl.disabled=false;
