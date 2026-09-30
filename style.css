@@ -251,8 +251,17 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 .three-day-weather{font-weight:700;color:#e2e8f0}
 .three-day-values{display:flex;flex-wrap:wrap;gap:7px;font-size:.78rem;color:#cbd5e1}
 .three-day-values span{padding:5px 8px;border-radius:8px;background:#111b31}
-.weather-card:has(.three-day-collapse[open]){grid-column:1 / -1;animation:forecastCardExpand .35s cubic-bezier(.22,.61,.36,1)}
-@keyframes forecastCardExpand{from{opacity:.82;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.weather-card:has(.three-day-collapse[open]),
+.weather-card.forecast-expanded{
+  grid-column:1 / span 3;
+  width:100%;
+  animation:forecastCardExpand .42s cubic-bezier(.22,.61,.36,1);
+  z-index:2;
+}
+@keyframes forecastCardExpand{
+  from{opacity:.78;transform:translateY(8px) scale(.995)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
 @media (max-width:900px){.weather-card:has(.three-day-collapse[open]){grid-column:1 / -1}.forecast-charts{grid-template-columns:1fr}}
 @media (max-width:560px){.three-day-forecast .three-day-item{grid-template-columns:1fr}.forecast-expand-hint{display:none}.three-day-collapse[open] .three-day-content{max-height:2600px}}
 @media(prefers-reduced-motion:reduce){.three-day-content,.three-day-collapse summary:after,.forecast-chart-line,.forecast-chart-dot{animation:none!important;transition:none!important}.three-day-collapse[open] .three-day-content{max-height:none;transform:none;opacity:1}}
