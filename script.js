@@ -415,6 +415,14 @@ async function analyzeRoute(){
       }
     }
     const conditions=nearby.map(x=>x.row.riding||ridingCondition(x.row)).filter(c=>Number.isFinite(c.score));
+    const routePoints=[];
+    if(nearby.length){
+      const pointCount=Math.min(7,nearby.length);
+      for(let i=0;i<pointCount;i++){
+        const index=Math.round(i*(nearby.length-1)/(pointCount-1||1));
+        routePoints.push(nearby[index]);
+      }
+    }
     if(!conditions.length)throw new Error("沿線沒有足夠的氣象資料可供分析。");
     const maxScore=Math.max(...conditions.map(c=>c.score));
     const avgScore=conditions.reduce((a,c)=>a+c.score,0)/conditions.length;
@@ -430,7 +438,13 @@ async function analyzeRoute(){
       '<div class="route-result-head"><div class="route-result-title">'+from.city+"｜"+from.town+" → "+to.city+"｜"+to.town+'</div><strong class="route-result-level">'+level.icon+" "+level.label+'</strong></div>'+
       '<div class="route-score-row"><div class="route-score"><strong>'+maxScore+'</strong><span>最差 Score</span></div><div class="route-summary">依道路路線沿線 '+nearby.length+' 個氣象資料點分析。<br><strong>建議：'+decision.icon+" "+decision.label+'</strong><br>最需注意路段：'+worst.row.city+"｜"+worst.row.town+'</div></div>'+
       '<div class="route-evidence"><div><span>道路距離</span><strong>'+distanceKm.toFixed(1)+' km</strong></div><div><span>預估車程</span><strong>'+durationMin+' 分鐘</strong></div><div><span>沿線平均 Score</span><strong>'+avgScore.toFixed(1)+'</strong></div><div><span>最高降雨機率</span><strong>'+(maxRain==null?"--":maxRain+" %")+'</strong></div></div>'+
-      '<div class="route-reasons">主要因素：'+(reasons.length?reasons.join("、"):"目前沒有明顯不利因素")+'<br><span>最需注意路段降雨機率：'+(worstRain==null?"--":worstRain+" %")+'</span></div>';
+      '<div class="route-reasons">主要因素：'+(reasons.length?reasons.join("、"):"目前沒有明顯不利因素")+'<br><span>最需注意路段降雨機率：'+(worstRain==null?"--":worstRain+" %")+'</span></div>'+
+      '<details class="route-points-collapse"><summary>🛣️ 查看沿線 '+routePoints.length+' 個氣象資料點</summary><div class="route-points-list">'+
+      routePoints.map((item,index)=>{
+        const r=item.row,cond=r.riding||ridingCondition(r);
+        return '<div class="route-point '+routeClass(cond.level)+'"><div class="route-point-index">'+(index+1)+'</div><div><div class="route-point-title"><strong>'+r.city+"｜"+r.town+'</strong><span>'+cond.icon+" "+cond.label+'</span></div><div class="route-point-metrics"><span class="route-point-score">Score '+cond.score+' / 5</span><span>🌡️ '+(Number.isFinite(r.temperature)?r.temperature+' °C':'--')+'</span><span>💧 '+(Number.isFinite(r.humidity)?r.humidity+' %':'--')+'</span><span>🌧️ '+(Number.isFinite(r.pop)?r.pop+' %':'--')+'</span><span>💨 '+(Number.isFinite(r.windSpeed)?r.windSpeed+' m/s':'--')+'</span></div><div class="route-point-weather">'+(r.weather||'天氣資料不足')+' · '+(r.windDirection||'風向未知')+'</div></div></div>';
+      }).join('')+
+      '</div></details>';
     if(taiwanMap){
       if(routeLayer)routeLayer.remove();
       routeLayer=L.polyline(coords,{color:"#7dd3fc",weight:5,opacity:.85}).addTo(taiwanMap);
