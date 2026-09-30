@@ -34,11 +34,11 @@ export default async function handler(req, res) {
       FROM weather_forecasts wf
       JOIN locations l ON l.id = wf.location_id
       WHERE date(wf.forecast_time, '+8 hours') >= (
-          SELECT date(MAX(forecast_time, '+8 hours'), '-6 days')
+          SELECT date(datetime(MAX(forecast_time), '+8 hours'), '-6 days')
           FROM weather_forecasts
         )
         AND date(wf.forecast_time, '+8 hours') < (
-          SELECT date(MAX(forecast_time, '+8 hours'), '+1 day')
+          SELECT date(datetime(MAX(forecast_time), '+8 hours'), '+1 day')
           FROM weather_forecasts
         )
       ORDER BY l.city, l.town, wf.forecast_time
@@ -77,6 +77,9 @@ export default async function handler(req, res) {
       meta: {
         locationCount: validation.location_count,
         forecastCount: validation.forecast_count,
+        forecastDayCount: validation.forecast_day_count,
+        minForecastDate: validation.min_forecast_date,
+        maxForecastDate: validation.max_forecast_date,
         validation
       }
     });
