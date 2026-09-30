@@ -670,7 +670,11 @@ function renderTaiwanMap(){
 
 function status(a,b){$("#statusTitle").textContent=a;$("#statusText").textContent=b}
 async function loadWeather(){
-  status("正在取得資料…","正在透過網站後端連線至中央氣象署。");$("#refreshBtn").disabled=true;$("#refreshBtn").textContent="取得資料中......";
+  status("正在取得資料…","正在透過網站後端連線至中央氣象署。");
+  const statusEl=$("#refreshStatus"),actionEl=$("#refreshAction");
+  actionEl.disabled=true;
+  statusEl.textContent="取得資料中......";
+  statusEl.classList.remove("is-success");
   try{
     const res=await fetch(API_URL),data=await res.json().catch(()=>null);
     if(!res.ok)throw new Error(data?.message||data?.result?.message||("HTTP "+res.status));
@@ -680,23 +684,25 @@ async function loadWeather(){
     loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();renderTaiwanMap();
     $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
-    const button=$("#refreshBtn");
-    button.disabled=true;
-    button.textContent="取得成功 ✓";
+    statusEl.textContent="取得成功 ✓";
+    statusEl.classList.add("is-success");
     clearTimeout(window.__refreshButtonTimer);
     window.__refreshButtonTimer=setTimeout(()=>{
-      button.disabled=false;
-      button.textContent="重新取得資料";
+      statusEl.textContent="取得成功 ✓";
+      statusEl.classList.remove("is-success");
+      actionEl.disabled=false;
+      actionEl.textContent="重新取得資料";
     },5000);
   }catch(e){
     console.error(e);
     status("取得資料失敗",e.message);
-    const button=$("#refreshBtn");
-    button.disabled=false;
-    button.textContent="重新取得資料";
+    statusEl.textContent="取得失敗";
+    statusEl.classList.remove("is-success");
+    actionEl.disabled=false;
+    actionEl.textContent="重新取得資料";
   }
 }
-$("#refreshBtn").addEventListener("click",loadWeather);
+$("#refreshAction").addEventListener("click",loadWeather);
 $("#searchInput").addEventListener("input",renderSuggestions);
 $("#searchInput").addEventListener("keydown",handleSearchKeydown);
 $("#townSelect").addEventListener("change",e=>{if(!state.selectedCity)return;if(e.target.value)renderTownResult(state.selectedCity,e.target.value);else renderCityCards(state.selectedCity)});
