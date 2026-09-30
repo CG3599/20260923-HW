@@ -95,55 +95,65 @@ function parseLocations(groups) {
     for (const location of group?.Location || []) {
       const weatherElements = location?.WeatherElement || [];
 
-      // CWA F-D0047-093 同時包含：
-      // 1. 未來 3 天逐 3 小時資料
-      // 2. 未來 7 天逐 12 小時資料
-      // 兩種資料的 ElementName 不完全相同，因此不能只解析「3小時」欄位。
-      const find = (...names) =>
-        weatherElements.find(x => names.includes(x.ElementName));
+      // F-D0047-093 同時包含未來 3 天逐 3 小時與未來 7 天逐 12 小時資料。
+      // 不再依賴 ElementName，直接掃描 ElementValue 的欄位名稱，
+      // 讓「平均溫度／平均相對濕度／12小時降雨機率／最大風速」等一週欄位也能被解析。
+      const timeMap = new Map();
 
-      const tempEl = find("溫度", "Temperature", "平均溫度");
-      const humidityEl = find("相對濕度", "RelativeHumidity", "平均相對濕度");
-      const popEl = find(
-        "3小時降雨機率",
-        "3小時降雨機率（%）",
-        "12小時降雨機率",
-        "12小時降雨機率（%）",
-        "24小時降雨機率",
-        "24小時降雨機率（%）",
-        "降雨機率",
-        "ProbabilityOfPrecipitation",
-        "3-hour ProbabilityOfPrecipitation",
-        "12-hour ProbabilityOfPrecipitation"
-      );
-      const weatherEl = find("天氣現象", "Weather");
-      const directionEl = find("風向", "WindDirection");
-      const speedEl = find("風速", "WindSpeed", "最大風速");
-
-      // 不要求所有氣象因子必須存在於同一時間點。
-      // 先建立所有 Element 的時間聯集，再逐一依時間找值。
-      const keys = new Set();
-      for (const el of [tempEl, humidityEl, popEl, weatherEl, directionEl, speedEl]) {
-        for (const t of el?.Time || []) {
+      for (const element of weatherElements) {
+        for (const t of element?.Time || []) {
           const key = t.StartTime || t.DataTime;
-          if (key) keys.add(key);
+          if (!key) continue;
+
+          if (!timeMap.has(key)) timeMap.set(key, {});
+          const target = timeMap.get(key);
+          const value = t.ElementValue?.[0] || {};
+
+          for (const [name, raw] of Object.entries(value)) {
+            if (raw == null || raw === "") continue;
+
+            if (
+              target.temperature == null &&
+              ["溫度","Temperature","平均溫度"].includes(name)
+            ) target.temperature = toNumber(raw);
+
+            if (
+              target.humidity == null &&
+              ["相對濕度","RelativeHumidity","平均相對濕度"].includes(name)
+            ) target.humidity = toNumber(raw);
+
+            if (
+              target.pop == null &&
+              ["ProbabilityOfPrecipitation","3小時降雨機率","3小時降雨機率（%）","12小時降雨機率","12小時降雨機率（%）","24小時降雨機率","24小時降雨機率（%）"].includes(name)
+            ) target.pop = toNumber(raw);
+
+            if (
+              target.windDirection == null &&
+              ["風向","WindDirection"].includes(name)
+            ) target.windDirection = raw;
+
+            if (
+              target.windSpeed == null &&
+              ["風速","WindSpeed","最大風速","MaxWindSpeed"].includes(name)
+            ) target.windSpeed = toNumber(raw);
+
+            if (
+              target.weather == null &&
+              ["天氣現象","Weather"].includes(name)
+            ) target.weather = raw;
+          }
         }
       }
 
-      const at = (el, forecastTime) => {
-        const item = (el?.Time || []).find(
-          t => (t.StartTime || t.DataTime) === forecastTime
-        );
-        return item?.ElementValue?.[0] || {};
-      };
-
-      for (const forecastTime of keys) {
-        const tv = at(tempEl, forecastTime);
-        const hv = at(humidityEl, forecastTime);
-        const pv = at(popEl, forecastTime);
-        const xv = at(weatherEl, forecastTime);
-        const dv = at(directionEl, forecastTime);
-        const sv = at(speedEl, forecastTime);
+      for (const [forecastTime, value] of timeMap.entries()) {
+        // 只建立至少有一項主要天氣資訊的時間點，避免其他輔助氣象因子製造空資料列。
+        if (
+          value.temperature == null &&
+          value.humidity == null &&
+          value.pop == null &&
+          value.windSpeed == null &&
+          value.weather == null
+        ) continue;
 
         locations.push({
           city,
@@ -151,20 +161,12 @@ function parseLocations(groups) {
           latitude: toNumber(location?.Latitude),
           longitude: toNumber(location?.Longitude),
           forecast_time: forecastTime,
-          temperature: toNumber(valueFrom(tv, ["溫度", "Temperature", "平均溫度", "Temperature"])),
-          humidity: toNumber(valueFrom(hv, ["相對濕度", "RelativeHumidity", "平均相對濕度"])),
-          precipitation_probability: toNumber(valueFrom(pv, [
-            "ProbabilityOfPrecipitation",
-            "3小時降雨機率",
-            "3小時降雨機率（%）",
-            "12小時降雨機率",
-            "12小時降雨機率（%）",
-            "24小時降雨機率",
-            "24小時降雨機率（%）"
-          ])),
-          weather: valueFrom(xv, ["天氣現象", "Weather"]) ?? "資料待更新",
-          wind_direction: valueFrom(dv, ["風向", "WindDirection"]) ?? "--",
-          wind_speed: toNumber(valueFrom(sv, ["風速", "WindSpeed", "最大風速"]))
+          temperature: value.temperature ?? null,
+          humidity: value.humidity ?? null,
+          precipitation_probability: value.pop ?? null,
+          weather: value.weather ?? "資料待更新",
+          wind_direction: value.windDirection ?? "--",
+          wind_speed: value.windSpeed ?? null
         });
       }
     }
