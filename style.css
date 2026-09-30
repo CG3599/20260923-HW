@@ -4,20 +4,15 @@ body{margin:0;font-family:Inter,"Noto Sans TC",system-ui,sans-serif;background:#
 body:before{content:"";position:fixed;inset:0;background:radial-gradient(circle at 10% 0%,#24345b 0,transparent 35%),radial-gradient(circle at 90% 20%,#173d4b 0,transparent 30%);pointer-events:none;z-index:-1;transform:translateZ(0)}
 .topbar,main,footer{max-width:1180px;margin:auto}
 
-.hero-title{display:flex;align-items:center;gap:0;position:relative;overflow:hidden;width:max-content;min-height:1.2em;font-size:clamp(2rem,5vw,3.4rem);margin:0 0 4px;font-weight:800;line-height:1.2}
-.hero-bar{display:inline-block;position:relative;z-index:2;opacity:0;animation:heroBarIn .28s ease-out .05s forwards}
-.hero-word{display:flex;overflow:hidden;white-space:nowrap}
-.hero-word span{display:inline-block;opacity:0;transform:translateX(-1.1em);animation:heroCharIn .48s cubic-bezier(.22,.75,.25,1) forwards}
-.hero-word span:nth-child(1){animation-delay:.28s}
-.hero-word span:nth-child(2){animation-delay:.48s}
-.hero-word span:nth-child(3){animation-delay:.68s}
-.hero-word span:nth-child(4){animation-delay:.88s}
-@keyframes heroBarIn{from{opacity:0;transform:translateX(-.35em)}to{opacity:1;transform:translateX(0)}}
-@keyframes heroCharIn{from{opacity:0;transform:translateX(-1.1em)}to{opacity:1;transform:translateX(0)}}
+.hero-title{display:flex;align-items:center;gap:.12em;position:relative;overflow:hidden;width:max-content;min-height:1.2em;font-size:clamp(2rem,5vw,3.4rem);margin:0 0 4px;font-weight:800;line-height:1.2}
+.hero-brand,.hero-divider{display:inline-block}
+.hero-divider{opacity:1}
+.hero-word{display:flex;white-space:nowrap;overflow:hidden}
+.hero-word span{display:inline-block;opacity:0;transform:translateX(-1.1em);animation:heroWordIn .55s cubic-bezier(.22,.75,.25,1) .25s forwards}
+@keyframes heroWordIn{from{opacity:0;transform:translateX(-1.1em)}to{opacity:1;transform:translateX(0)}}
 @media(prefers-reduced-motion:reduce){
-  .hero-bar,.hero-word span{animation:none;opacity:1;transform:none}
+  .hero-word span{animation:none;opacity:1;transform:none}
 }
-
 .topbar{padding:48px 24px 28px;display:flex;justify-content:space-between;gap:24px;align-items:end}
 h1,h2,h3,p{margin-top:0}.topbar h1{font-size:clamp(2rem,5vw,3.4rem);margin-bottom:4px}.topbar p,.muted{color:#aeb9d6}.eyebrow{font-size:.76rem;letter-spacing:.18em;color:#7dd3fc;font-weight:800}
 .actions{display:flex;gap:10px;flex-wrap:wrap}button,input,select{font:inherit}button{border:0;border-radius:12px;padding:12px 17px;cursor:pointer;font-weight:700}
