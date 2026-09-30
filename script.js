@@ -579,8 +579,7 @@ function renderTownResult(city,town){
   $("#searchHint").textContent="目前顯示："+city+"｜"+town+"。選擇其他鄉鎮即可切換。";
 }
 function renderCityCards(city){openDefaultCities();renderRows([cityRepresentative(city)].filter(Boolean),false);$("#searchHint").textContent="已選擇："+city+"，下方選單可查看該縣市所有鄉鎮。"}
-function renderThreeDayForecast(container,r){
-  container.innerHTML="";
+function forecastDays(r){
   const forecast=(r?.forecast||[]).filter(x=>x?.start).sort((a,b)=>new Date(a.start)-new Date(b.start));
   const days=new Map();
   for(const item of forecast){
@@ -589,29 +588,41 @@ function renderThreeDayForecast(container,r){
     if(!days.has(key))days.set(key,[]);
     days.get(key).push(item);
   }
-  [...days.entries()].slice(0,7).forEach(([key,items],index)=>{
+  return [...days.entries()].slice(0,7).map(([key,items],index)=>{
     const temps=items.map(x=>x.temperature).filter(Number.isFinite);
     const pops=items.map(x=>x.pop).filter(Number.isFinite);
     const hums=items.map(x=>x.humidity).filter(Number.isFinite);
     const winds=items.map(x=>x.windSpeed).filter(Number.isFinite);
-    const weather=items.find(x=>x.weather&&x.weather!=="資料待更新")?.weather||"資料待更新";
-    const dateLabel=index===0?"今天":index===1?"明天":index===2?"後天":`第${index+1}天`;
-    const el=document.createElement("div");
-    el.className="three-day-item";
-    el.innerHTML=
-      '<div class="three-day-head"><strong>'+dateLabel+'</strong><span>'+key+'</span></div>'+
-      '<div class="three-day-weather">'+icon(weather)+' '+weather+'</div>'+
-      '<div class="three-day-values">'+
-        '<span>🌡️ '+(temps.length?Math.min(...temps)+"–"+Math.max(...temps):"--")+' °C</span>'+
-        '<span>🌧️ '+(pops.length?Math.max(...pops):"--")+' %</span>'+
-        '<span>💧 '+(hums.length?(hums.reduce((a,b)=>a+b,0)/hums.length).toFixed(0):"--")+' %</span>'+
-        '<span>💨 '+(winds.length?Math.max(...winds).toFixed(1):"--")+' m/s</span>'+
-      '</div>';
-    container.appendChild(el);
+    return {key,items,index,dateLabel:index===0?"今天":index===1?"明天":index===2?"後天":`第${index+1}天`,temp:temps.length?temps.reduce((a,b)=>a+b,0)/temps.length:null,minTemp:temps.length?Math.min(...temps):null,maxTemp:temps.length?Math.max(...temps):null,pop:pops.length?Math.max(...pops):null,humidity:hums.length?hums.reduce((a,b)=>a+b,0)/hums.length:null,wind:winds.length?Math.max(...winds):null,weather:items.find(x=>x.weather&&x.weather!=="資料待更新")?.weather||"資料待更新"};
   });
-  if(!container.children.length)container.innerHTML='<p class="muted">目前沒有可用的三日預報資料。</p>';
 }
-
+function buildLineChart(days,type){
+  const width=720,height=220,pad={l:48,r:24,t:30,b:42};
+  const values=days.map(d=>type==="temp"?d.temp:d.pop).map(v=>Number.isFinite(v)?v:null);
+  const valid=values.filter(v=>v!==null);
+  if(!valid.length)return '<div class="forecast-chart-empty">目前沒有可用資料</div>';
+  let min=Math.min(...valid),max=Math.max(...valid);
+  if(type==="temp"){min=Math.floor(min-1);max=Math.ceil(max+1);}
+  else {min=Math.max(0,Math.floor(min/10)*10);max=Math.min(100,Math.ceil(max/10)*10);if(min===max){min=Math.max(0,min-10);max=Math.min(100,max+10);}}
+  if(min===max){min-=1;max+=1;}
+  const x=i=>pad.l+(days.length===1?0:i*(width-pad.l-pad.r)/(days.length-1));
+  const y=v=>pad.t+(max-v)*(height-pad.t-pad.b)/(max-min);
+  const points=values.map((v,i)=>v===null?null:`${x(i).toFixed(1)},${y(v).toFixed(1)}`).filter(Boolean).join(" ");
+  const unit=type==="temp"?"°C":"%";
+  const title=type==="temp"?"🌡️ 溫度變化":"🌧️ 降雨機率變化";
+  const labels=days.map((d,i)=>`<text x="${x(i)}" y="${height-14}" text-anchor="middle" class="forecast-chart-label">${d.dateLabel}</text>`).join("");
+  const dots=values.map((v,i)=>v===null?"":`<circle cx="${x(i)}" cy="${y(v)}" r="4" class="forecast-chart-dot"><title>${days[i].dateLabel}：${v.toFixed(0)}${unit}</title></circle>`).join("");
+  const guides=[0,.5,1].map(t=>{const value=max-(max-min)*t;return `<line x1="${pad.l}" x2="${width-pad.r}" y1="${y(value)}" y2="${y(value)}" class="forecast-chart-grid"/><text x="${pad.l-9}" y="${y(value)+4}" text-anchor="end" class="forecast-chart-y">${value.toFixed(0)}${unit}</text>`;}).join("");
+  return `<div class="forecast-chart"><div class="forecast-chart-title"><strong>${title}</strong><span>7 日趨勢</span></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${title}"><g>${guides}</g><polyline points="${points}" class="forecast-chart-line" fill="none" stroke-linecap="round" stroke-linejoin="round"></polyline><g>${dots}</g><g>${labels}</g></svg></div>`;
+}
+function renderThreeDayForecast(container,r){
+  container.innerHTML="";
+  const days=forecastDays(r);
+  if(!days.length){container.innerHTML='<p class="muted">目前沒有可用的 7 日預報資料。</p>';return;}
+  container.innerHTML='<div class="forecast-charts">'+buildLineChart(days,"temp")+buildLineChart(days,"pop")+'</div><div class="three-day-forecast">'+
+    days.map(d=>'<div class="three-day-item"><div class="three-day-head"><strong>'+d.dateLabel+'</strong><span>'+d.key+'</span></div><div class="three-day-weather">'+icon(d.weather)+' '+d.weather+'</div><div class="three-day-values"><span>🌡️ '+(d.minTemp!=null?d.minTemp+"–"+d.maxTemp:"--")+' °C</span><span>🌧️ 降雨機率 '+(d.pop!=null?d.pop:"--")+' %</span><span>💧 濕度 '+(d.humidity!=null?d.humidity.toFixed(0):"--")+' %</span><span>💨 最高風速 '+(d.wind!=null?d.wind.toFixed(1):"--")+' m/s</span></div></div>').join("")+
+    '</div>';
+}
 function renderRows(rows,showAll=false){
   const g=$("#weatherGrid");g.innerHTML="";
   if(!rows.length){g.innerHTML='<div class="source-card"><strong>沒有符合的資料</strong><p>請重新搜尋或清除選擇。</p></div>';return}
