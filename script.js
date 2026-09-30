@@ -379,7 +379,21 @@ function nearestWeatherRow(lat,lon){
   return best?{row:best,distance:bestDistance}:null;
 }
 function routeClass(level){return level==="high"?"route-high":level==="caution"?"route-caution":level==="normal"?"route-normal":"route-good"}
-async function analyzeRoute(){
+async function clearRouteAnalysis(){
+  const from=routeSearchElements("from"),to=routeSearchElements("to");
+  [from,to].forEach(e=>{
+    if(e.input)e.input.value="";
+    if(e.value)e.value.value="";
+    if(e.input){delete e.input.dataset.city;delete e.input.dataset.mode;delete e.input.dataset.index;}
+    if(e.townWrap)e.townWrap.classList.add("hidden");
+    if(e.suggestions)e.suggestions.classList.add("hidden");
+    if(e.town)e.town.innerHTML='<option value="">請先選擇縣市</option>';
+  });
+  const box=$("#routeResult");
+  if(box){box.className="route-result hidden";box.innerHTML="";}
+  if(routeLayer&&taiwanMap){routeLayer.remove();routeLayer=null;}
+}
+function analyzeRoute(){
   const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
   if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return}
   if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return}
@@ -747,5 +761,6 @@ $("#townSelect").addEventListener("change",e=>{
 });
 $("#clearSearchBtn").addEventListener("click",clearSearch);
 $("#analyzeRouteBtn").addEventListener("click",analyzeRoute);
+$("#clearRouteBtn").addEventListener("click",clearRouteAnalysis);
 document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
 window.addEventListener("load",loadWeather);
