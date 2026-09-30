@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     db = new Database(dbPath, { readonly: true, fileMustExist: true });
     db.pragma("foreign_keys = ON");
 
-    // 取得「現在起 3 天」的完整預報資料；前端會依鄉鎮分組並顯示每日摘要。
+    // 取得「現在起 7 天」的完整預報資料；前端會依鄉鎮分組並顯示每日摘要。
     const rows = db.prepare(`
       SELECT
         l.city,
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
       FROM weather_forecasts wf
       JOIN locations l ON l.id = wf.location_id
       WHERE wf.forecast_time >= datetime('now', '+8 hours')
-        AND wf.forecast_time < datetime('now', '+8 hours', '+3 days')
+        AND wf.forecast_time < datetime('now', '+8 hours', '+7 days')
       ORDER BY l.city, l.town, wf.forecast_time
     `).all();
 
@@ -75,7 +75,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       source: "SQLite",
-      sql: "weather_forecasts JOIN locations + 取得現在起 3 天完整預報",
+      sql: "weather_forecasts JOIN locations + 取得現在起 7 天完整預報",
       records: {
         Locations: rows
       },
