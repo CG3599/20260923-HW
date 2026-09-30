@@ -584,7 +584,7 @@ function forecastDays(r){
   const days=new Map();
   for(const item of forecast){
     const d=new Date(item.start);
-    const key=d.toLocaleDateString("zh-TW",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit"});
+    const key=new Intl.DateTimeFormat("zh-TW",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit"}).format(d);
     if(!days.has(key))days.set(key,[]);
     days.get(key).push(item);
   }
