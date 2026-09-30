@@ -171,9 +171,15 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
   .route-point-title{align-items:flex-start;flex-direction:column;gap:3px}
   .route-point-metrics span{padding:5px 7px;font-size:.74rem}
 }
-/* Refresh button loading state */
-.primary:disabled{cursor:not-allowed;background:#475569;color:#94a3b8;border-color:#64748b;opacity:.9;box-shadow:none;}
-.primary:disabled:hover{background:#475569;color:#94a3b8;}
+/* Refresh status/action segmented control */
+.refresh-control{display:inline-flex;align-items:stretch;border-radius:12px;overflow:hidden;border:1px solid #33415f;box-shadow:0 8px 18px #0002}
+.refresh-status,.refresh-action{min-height:46px;padding:12px 17px;display:flex;align-items:center;justify-content:center;font:inherit;font-weight:700}
+.refresh-status{background:#475569;color:#94a3b8;min-width:118px}
+.refresh-status.is-success{background:#e8f3ff;color:#10203a}
+.refresh-action{border:0;border-left:1px solid #33415f;border-radius:0;background:#e8f3ff;color:#10203a;cursor:pointer;min-width:138px}
+.refresh-action:hover{background:#d8ebff}
+.refresh-action:disabled{cursor:not-allowed;opacity:.65}
+@media(max-width:560px){.refresh-control{width:100%}.refresh-status,.refresh-action{flex:1;min-width:0}}
 
 .weekly-panel{margin:0 24px 36px;padding:20px;border-radius:18px;background:rgba(18,27,49,.92);border:1px solid #293755;box-shadow:0 8px 24px #0002}
 .weekly-panel .section-head{padding:0 0 16px}
