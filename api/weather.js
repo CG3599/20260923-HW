@@ -56,7 +56,6 @@ export default async function handler(req, res) {
     if (
       validation.location_count !== 368 ||
       validation.forecast_count === 0 ||
-      validation.forecast_day_count < 7
     ) {
       return res.status(500).json({
         success: false,
