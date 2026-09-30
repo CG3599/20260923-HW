@@ -415,14 +415,7 @@ async function analyzeRoute(){
       }
     }
     const conditions=nearby.map(x=>x.row.riding||ridingCondition(x.row)).filter(c=>Number.isFinite(c.score));
-    const routePoints=[];
-    if(nearby.length){
-      const pointCount=Math.min(7,nearby.length);
-      for(let i=0;i<pointCount;i++){
-        const index=Math.round(i*(nearby.length-1)/(pointCount-1||1));
-        routePoints.push(nearby[index]);
-      }
-    }
+    const routePoints=nearby;
     if(!conditions.length)throw new Error("沿線沒有足夠的氣象資料可供分析。");
     const maxScore=Math.max(...conditions.map(c=>c.score));
     const avgScore=conditions.reduce((a,c)=>a+c.score,0)/conditions.length;
