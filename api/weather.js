@@ -33,8 +33,8 @@ export default async function handler(req, res) {
         wf.wind_speed
       FROM weather_forecasts wf
       JOIN locations l ON l.id = wf.location_id
-      WHERE wf.forecast_time >= datetime('now', '+8 hours')
-        AND wf.forecast_time < datetime('now', '+8 hours', '+7 days')
+      WHERE wf.forecast_time >= date('now', '+8 hours')
+        AND wf.forecast_time < date('now', '+8 hours', '+7 days')
       ORDER BY l.city, l.town, wf.forecast_time
     `).all();
 
