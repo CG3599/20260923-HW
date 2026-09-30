@@ -551,13 +551,13 @@ function renderThreeDayForecast(container,r){
     if(!days.has(key))days.set(key,[]);
     days.get(key).push(item);
   }
-  [...days.entries()].slice(0,3).forEach(([key,items],index)=>{
+  [...days.entries()].slice(0,7).forEach(([key,items],index)=>{
     const temps=items.map(x=>x.temperature).filter(Number.isFinite);
     const pops=items.map(x=>x.pop).filter(Number.isFinite);
     const hums=items.map(x=>x.humidity).filter(Number.isFinite);
     const winds=items.map(x=>x.windSpeed).filter(Number.isFinite);
     const weather=items.find(x=>x.weather&&x.weather!=="資料待更新")?.weather||"資料待更新";
-    const dateLabel=index===0?"今天":index===1?"明天":"後天";
+    const dateLabel=index===0?"今天":index===1?"明天":index===2?"後天":`第${index+1}天`;
     const el=document.createElement("div");
     el.className="three-day-item";
     el.innerHTML=
