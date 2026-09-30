@@ -18,9 +18,9 @@
 <details class="score-explanation">
     <summary>📊 分數說明</summary>
     <div class="score-explanation-body">
-      <p>滿分 5 分，分數越高代表騎乘條件越穩定；依不利天氣因素逐項扣分。此評分為網站 Prototype 分析機制，並非官方道路安全標準。</p>
+      <p>滿分 5 分，分數越高代表目前可取得資料所推估的騎乘條件越穩定。降雨機率／雨量不納入分數，避免資料缺失時誤判。此評分為網站 Prototype 分析機制，並非官方道路安全標準。</p><p class="muted">⚠️ 未來預測距離現在越遠，不確定性通常越高；因此第 4–7 天的騎乘條件僅供趨勢參考，實際出發前請重新確認最新預報。</p>
       <div class="score-rule-grid">
-        <div><strong>🌧️ 降雨機率</strong><span>40–69%：扣 1 分　≥70%：扣 2 分</span></div>
+        <div><strong>🌧️ 降雨資料</strong><span>不納入騎乘條件分數，僅依目前可取得資料估算</span></div>
         <div><strong>💨 風速</strong><span>≥7 m/s：扣 1 分</span></div>
         <div><strong>🌡️ 氣溫</strong><span>≤10°C：扣 1 分　≥35°C：扣 1 分</span></div>
         <div><strong>💧 濕度</strong><span>≥90%：扣 1 分</span></div>
@@ -141,7 +141,7 @@
   </div>
   
   <details class="three-day-collapse">
-    <summary><span>📅 未來 7 天天氣</span><span class="forecast-expand-hint">展開查看趨勢</span></summary>
+    <summary><span>📅 未來 7 天天氣</span><span class="forecast-expand-hint">展開查看趨勢</span></summary><p class="forecast-disclaimer">⚠️ 騎乘條件為依目前可取得資料的估算；預測日期距現在越遠，誤差可能越大，第 4–7 天請以趨勢參考為主，出發前再次確認最新預報。</p>
     <div class="three-day-content"><div class="three-day-forecast"></div></div>
   </details>
   <div class="forecast-time"></div>
