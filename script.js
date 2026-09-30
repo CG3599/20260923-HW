@@ -686,6 +686,8 @@ async function loadWeather(){
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
     statusEl.textContent="取得成功 ✓";
     statusEl.classList.add("is-success");
+    actionEl.disabled=false;
+    actionEl.textContent="重新取得資料";
     clearTimeout(window.__refreshButtonTimer);
     window.__refreshButtonTimer=setTimeout(()=>{
       statusEl.textContent="取得成功 ✓";
