@@ -88,18 +88,40 @@ async function fetchBatch(batch) {
 
 function parseLocations(groups) {
   const locations = [];
+
   for (const group of groups) {
     const city = group?.LocationsName || "未知縣市";
+
     for (const location of group?.Location || []) {
       const weatherElements = location?.WeatherElement || [];
-      const find = (...names) => weatherElements.find(x => names.includes(x.ElementName));
-      const tempEl = find("溫度", "Temperature");
-      const humidityEl = find("相對濕度", "RelativeHumidity");
-      const popEl = find("3小時降雨機率", "3小時降雨機率（%）", "降雨機率", "ProbabilityOfPrecipitation", "3-hour ProbabilityOfPrecipitation");
+
+      // CWA F-D0047-093 同時包含：
+      // 1. 未來 3 天逐 3 小時資料
+      // 2. 未來 7 天逐 12 小時資料
+      // 兩種資料的 ElementName 不完全相同，因此不能只解析「3小時」欄位。
+      const find = (...names) =>
+        weatherElements.find(x => names.includes(x.ElementName));
+
+      const tempEl = find("溫度", "Temperature", "平均溫度");
+      const humidityEl = find("相對濕度", "RelativeHumidity", "平均相對濕度");
+      const popEl = find(
+        "3小時降雨機率",
+        "3小時降雨機率（%）",
+        "12小時降雨機率",
+        "12小時降雨機率（%）",
+        "24小時降雨機率",
+        "24小時降雨機率（%）",
+        "降雨機率",
+        "ProbabilityOfPrecipitation",
+        "3-hour ProbabilityOfPrecipitation",
+        "12-hour ProbabilityOfPrecipitation"
+      );
       const weatherEl = find("天氣現象", "Weather");
       const directionEl = find("風向", "WindDirection");
-      const speedEl = find("風速", "WindSpeed");
+      const speedEl = find("風速", "WindSpeed", "最大風速");
 
+      // 不要求所有氣象因子必須存在於同一時間點。
+      // 先建立所有 Element 的時間聯集，再逐一依時間找值。
       const keys = new Set();
       for (const el of [tempEl, humidityEl, popEl, weatherEl, directionEl, speedEl]) {
         for (const t of el?.Time || []) {
@@ -108,25 +130,46 @@ function parseLocations(groups) {
         }
       }
 
+      const at = (el, forecastTime) => {
+        const item = (el?.Time || []).find(
+          t => (t.StartTime || t.DataTime) === forecastTime
+        );
+        return item?.ElementValue?.[0] || {};
+      };
+
       for (const forecastTime of keys) {
-        const at = el => (el?.Time || []).find(t => (t.StartTime || t.DataTime) === forecastTime)?.ElementValue?.[0] || {};
-        const tv = at(tempEl), hv = at(humidityEl), pv = at(popEl), xv = at(weatherEl), dv = at(directionEl), sv = at(speedEl);
+        const tv = at(tempEl, forecastTime);
+        const hv = at(humidityEl, forecastTime);
+        const pv = at(popEl, forecastTime);
+        const xv = at(weatherEl, forecastTime);
+        const dv = at(directionEl, forecastTime);
+        const sv = at(speedEl, forecastTime);
+
         locations.push({
           city,
           town: location?.LocationName || "未知鄉鎮",
           latitude: toNumber(location?.Latitude),
           longitude: toNumber(location?.Longitude),
           forecast_time: forecastTime,
-          temperature: toNumber(valueFrom(tv, ["溫度", "Temperature"])),
-          humidity: toNumber(valueFrom(hv, ["相對濕度", "RelativeHumidity"])),
-          precipitation_probability: toNumber(valueFrom(pv, ["ProbabilityOfPrecipitation", "3小時降雨機率", "3小時降雨機率（%）"])),
+          temperature: toNumber(valueFrom(tv, ["溫度", "Temperature", "平均溫度", "Temperature"])),
+          humidity: toNumber(valueFrom(hv, ["相對濕度", "RelativeHumidity", "平均相對濕度"])),
+          precipitation_probability: toNumber(valueFrom(pv, [
+            "ProbabilityOfPrecipitation",
+            "3小時降雨機率",
+            "3小時降雨機率（%）",
+            "12小時降雨機率",
+            "12小時降雨機率（%）",
+            "24小時降雨機率",
+            "24小時降雨機率（%）"
+          ])),
           weather: valueFrom(xv, ["天氣現象", "Weather"]) ?? "資料待更新",
           wind_direction: valueFrom(dv, ["風向", "WindDirection"]) ?? "--",
-          wind_speed: toNumber(valueFrom(sv, ["風速", "WindSpeed"]))
+          wind_speed: toNumber(valueFrom(sv, ["風速", "WindSpeed", "最大風速"]))
         });
       }
     }
   }
+
   return locations;
 }
 
@@ -150,6 +193,39 @@ async function main() {
 
   if (!rows.length) throw new Error("CWA 沒有回傳任何天氣資料。");
   if (invalidRows.length) throw new Error(`資料驗證失敗：${invalidRows.length} 筆資料不符合格式或範圍。`);
+
+  // 真正驗證每一個鄉鎮是否都有至少 7 個台灣日曆日的預報。
+  // 若只有 3～4 天，Build 直接失敗，避免把不完整資料部署到網站。
+  const dateFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const locationDates = new Map();
+  for (const row of rows) {
+    const key = row.city + "||" + row.town;
+    if (!locationDates.has(key)) locationDates.set(key, new Set());
+    const d = new Date(row.forecast_time);
+    if (!Number.isNaN(d.getTime())) {
+      locationDates.get(key).add(dateFormatter.format(d));
+    }
+  }
+  const insufficientLocations = [...locationDates.entries()]
+    .filter(([, dates]) => dates.size < 7)
+    .map(([key, dates]) => ({ location: key, forecastDayCount: dates.size }));
+
+  if (locationDates.size !== 368) {
+    throw new Error(`CWA 鄉鎮數量異常：取得 ${locationDates.size} 個鄉鎮，預期 368 個。`);
+  }
+  if (insufficientLocations.length) {
+    const sample = insufficientLocations.slice(0, 10)
+      .map(x => `${x.location}=${x.forecastDayCount}天`)
+      .join(", ");
+    throw new Error(
+      `CWA/Parser 預報資料不足 7 天：${insufficientLocations.length} 個鄉鎮不足 7 天。範例：${sample}`
+    );
+  }
 
   const db = new Database(DB_FILE);
   db.pragma("foreign_keys = ON");
