@@ -749,18 +749,34 @@ async function loadWeather(){
     actionEl.textContent="重新取得資料";
   }
 }
-$("#refreshAction").addEventListener("click",loadWeather);
-$("#searchInput").addEventListener("input",renderSuggestions);
-$("#searchInput").addEventListener("keydown",handleSearchKeydown);
-$("#townSelect").addEventListener("change",e=>{
+const refreshAction=$("#refreshAction");
+if(refreshAction)refreshAction.addEventListener("click",loadWeather);
+const searchInput=$("#searchInput");
+if(searchInput){
+  searchInput.addEventListener("input",renderSuggestions);
+  searchInput.addEventListener("keydown",handleSearchKeydown);
+}
+const townSelect=$("#townSelect");
+if(townSelect)townSelect.addEventListener("change",e=>{
   if(!state.selectedCity)return;
   if(e.target.value){
     renderTownResult(state.selectedCity,e.target.value);
     openDefaultCities();
   }else renderCityCards(state.selectedCity);
 });
-$("#clearSearchBtn").addEventListener("click",clearSearch);
-$("#analyzeRouteBtn").addEventListener("click",analyzeRoute);
-$("#clearRouteBtn").addEventListener("click",clearRouteAnalysis);
-document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
-window.addEventListener("load",loadWeather);
+const clearSearchBtn=$("#clearSearchBtn");
+if(clearSearchBtn)clearSearchBtn.addEventListener("click",clearSearch);
+const analyzeRouteBtn=$("#analyzeRouteBtn");
+if(analyzeRouteBtn)analyzeRouteBtn.addEventListener("click",analyzeRoute);
+const clearRouteBtn=$("#clearRouteBtn");
+if(clearRouteBtn)clearRouteBtn.addEventListener("click",clearRouteAnalysis);
+document.addEventListener("click",e=>{if(!e.target.closest(".search-field")){const suggestions=$("#suggestions");if(suggestions)suggestions.classList.add("hidden")}});
+window.addEventListener("load",()=>{
+  const statusTitle=$("#statusTitle");
+  const statusText=$("#statusText");
+  const refreshStatus=$("#refreshStatus");
+  if(statusTitle)statusTitle.textContent="正在取得氣象資料";
+  if(statusText)statusText.textContent="正在從網站後端讀取 SQLite 氣象資料。";
+  if(refreshStatus)refreshStatus.textContent="取得資料中......";
+  loadWeather();
+});
