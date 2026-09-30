@@ -174,3 +174,35 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 /* Refresh button loading state */
 .primary:disabled{cursor:not-allowed;background:#475569;color:#94a3b8;border-color:#64748b;opacity:.9;box-shadow:none;}
 .primary:disabled:hover{background:#475569;color:#94a3b8;}
+
+.weekly-panel{margin:0 24px 36px;padding:20px;border-radius:18px;background:rgba(18,27,49,.92);border:1px solid #293755;box-shadow:0 8px 24px #0002}
+.weekly-panel .section-head{padding:0 0 16px}
+.weekly-controls{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.weekly-field{position:relative}
+.weekly-field label{display:block;color:#8e9bb8;font-size:.8rem;margin-bottom:6px}
+.weekly-field select{appearance:none;width:100%;background:linear-gradient(135deg,#111a30,#17213a);color:#eef2ff;border:1px solid #34415e;border-radius:13px;padding:13px 42px 13px 14px;outline:none;font-weight:700;cursor:pointer;box-shadow:inset 0 1px #ffffff08}
+.weekly-field:after{content:"⌄";position:absolute;right:15px;bottom:11px;color:#7dd3fc;font-size:1.15rem;pointer-events:none}
+.weekly-field select:hover{border-color:#4f668d;background:linear-gradient(135deg,#15213b,#1b2a48)}
+.weekly-field select:focus{border-color:#7dd3fc;box-shadow:0 0 0 3px #7dd3fc18}
+.weekly-result{margin-top:16px;padding:18px;border:1px solid #33415f;border-radius:16px;background:linear-gradient(135deg,rgba(13,21,40,.98),rgba(25,37,62,.9));min-height:180px}
+.weekly-result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.weekly-date-label{color:#7dd3fc;font-size:.76rem;font-weight:800;letter-spacing:.08em}
+.weekly-title{margin:2px 0 0;font-size:1.25rem}
+.weekly-weather-icon{font-size:2.7rem;line-height:1}
+.weekly-temp-row{display:flex;align-items:baseline;gap:7px;margin:15px 0 14px}
+.weekly-temp{font-size:3rem;font-weight:900;line-height:1}
+.weekly-temp-unit{color:#8e9bb8}
+.weekly-weather-name{color:#b8c7e6;font-size:.9rem}
+.weekly-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.weekly-metric{padding:10px;border-radius:11px;background:#111a30}
+.weekly-metric span{display:block;color:#8190ad;font-size:.68rem}
+.weekly-metric strong{display:block;margin-top:2px;font-size:.88rem}
+.weekly-riding{margin-top:12px;padding:10px 12px;border-radius:11px;background:#0d1528;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.weekly-riding span{color:#8190ad;font-size:.75rem}
+.weekly-riding strong{font-size:.82rem}
+.weekly-good{border-color:#365a4a}.weekly-normal{border-color:#665d32}.weekly-caution{border-color:#6b4c2c}.weekly-high{border-color:#713642}
+.weekly-good .weekly-riding strong{color:#86efac}.weekly-normal .weekly-riding strong{color:#fde68a}.weekly-caution .weekly-riding strong{color:#fdba74}.weekly-high .weekly-riding strong{color:#fda4af}
+.weekly-empty{display:flex;align-items:center;justify-content:center;min-height:140px;color:#8190ad;font-size:.84rem;text-align:center}
+.weekly-hint{color:#8190ad;font-size:.76rem;margin:10px 0 0}
+@media(max-width:700px){.weekly-controls{grid-template-columns:1fr}.weekly-metrics{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.weekly-panel{margin-left:0;margin-right:0;border-radius:0;padding:18px 16px}.weekly-result{padding:15px}.weekly-temp{font-size:2.6rem}}
