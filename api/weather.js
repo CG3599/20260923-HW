@@ -28,6 +28,9 @@ export default async function handler(req, res) {
   }
 
   try {
+    // CWA 全台 368 鄉鎮資料量較大，啟用 Vercel CDN 快取，避免每次重新取得都等待 CWA。
+    res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=120");
+
     const results = await Promise.all(
       batches.map(async (batch) => {
         const url = new URL(
