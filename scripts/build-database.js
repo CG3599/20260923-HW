@@ -188,6 +188,9 @@ async function main() {
     SELECT
       (SELECT COUNT(*) FROM locations) AS location_count,
       (SELECT COUNT(*) FROM weather_forecasts) AS forecast_count,
+      (SELECT COUNT(DISTINCT date(forecast_time, '+8 hours')) FROM weather_forecasts) AS forecast_day_count,
+      (SELECT MIN(date(forecast_time, '+8 hours')) FROM weather_forecasts) AS min_forecast_date,
+      (SELECT MAX(date(forecast_time, '+8 hours')) FROM weather_forecasts) AS max_forecast_date,
       (SELECT COUNT(*) FROM locations WHERE city IS NULL OR city = '' OR town IS NULL OR town = '') AS invalid_location_name,
       (SELECT COUNT(*) FROM locations WHERE latitude NOT BETWEEN 20 AND 27 OR longitude NOT BETWEEN 118 AND 123) AS invalid_coordinates,
       (SELECT COUNT(*) FROM weather_forecasts WHERE temperature IS NOT NULL AND (temperature < -30 OR temperature > 60)) AS invalid_temperature,
@@ -201,6 +204,7 @@ async function main() {
   const validationPassed =
     validation.location_count === 368 &&
     validation.forecast_count > 0 &&
+    validation.forecast_day_count >= 7 &&
     validation.invalid_location_name === 0 &&
     validation.invalid_coordinates === 0 &&
     validation.invalid_temperature === 0 &&
@@ -226,6 +230,7 @@ async function main() {
 
   console.log("=== SQLite Data Validation ===");
   console.log(JSON.stringify(validation, null, 2));
+  console.log(`預報日期：${validation.min_forecast_date} ～ ${validation.max_forecast_date}，共 ${validation.forecast_day_count} 個日曆日。`);
 
   if (!validationPassed) {
     throw new Error("SQLite SQL 驗證失敗：資料庫未通過完整性檢查。");
