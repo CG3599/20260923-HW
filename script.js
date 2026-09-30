@@ -588,6 +588,100 @@ function renderTaiwanMap(){
   setTimeout(()=>taiwanMap.invalidateSize(),100);
 }
 
+function weeklyDateKey(value){
+  if(!value)return "";
+  const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(value));
+  const get=t=>parts.find(p=>p.type===t)?.value||"";
+  return get("year")+"-"+get("month")+"-"+get("day");
+}
+function weeklyDateLabel(key){
+  const d=new Date(key+"T12:00:00+08:00");
+  const today=weeklyDateKey(new Date());
+  const tomorrow=weeklyDateKey(new Date(Date.now()+86400000));
+  const weekday=new Intl.DateTimeFormat("zh-TW",{weekday:"short",timeZone:"Asia/Taipei"}).format(d);
+  if(key===today)return "今天（"+weekday+"）";
+  if(key===tomorrow)return "明天（"+weekday+"）";
+  return new Intl.DateTimeFormat("zh-TW",{month:"numeric",day:"numeric",weekday:"short",timeZone:"Asia/Taipei"}).format(d);
+}
+function weeklyDays(row){
+  const groups=new Map();
+  for(const item of row?.forecast||[]){
+    const key=weeklyDateKey(item.start);
+    if(!key)continue;
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(item);
+  }
+  return [...groups.entries()].slice(0,7).map(([date,items])=>{
+    const temps=items.map(x=>x.temperature).filter(Number.isFinite);
+    const humidity=items.map(x=>x.humidity).filter(Number.isFinite);
+    const pops=items.map(x=>x.pop).filter(Number.isFinite);
+    const winds=items.filter(x=>Number.isFinite(x.windSpeed));
+    const weatherCounts=new Map();
+    items.forEach(x=>{if(x.weather)weatherCounts.set(x.weather,(weatherCounts.get(x.weather)||0)+1)});
+    const weather=[...weatherCounts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||"資料待更新";
+    const maxWind=winds.length?winds.reduce((a,b)=>b.windSpeed>a.windSpeed?b:a):null;
+    const daily={
+      date,
+      label:weeklyDateLabel(date),
+      minTemp:temps.length?Math.min(...temps):null,
+      maxTemp:temps.length?Math.max(...temps):null,
+      humidity:humidity.length?Math.round(humidity.reduce((a,b)=>a+b,0)/humidity.length):null,
+      pop:pops.length?Math.max(...pops):null,
+      windSpeed:maxWind?.windSpeed??null,
+      windDirection:maxWind?.windDirection??"--",
+      weather,
+      icon:icon(weather)
+    };
+    const riding=ridingCondition({
+      temperature:daily.maxTemp,
+      humidity:daily.humidity,
+      pop:daily.pop,
+      windSpeed:daily.windSpeed
+    });
+    daily.riding=riding;
+    return daily;
+  });
+}
+function renderWeeklyCityOptions(){
+  const sel=$("#weeklyCitySelect"); if(!sel)return;
+  const current=sel.value;
+  sel.innerHTML=cities().map(city=>'<option value="'+city.replaceAll('"','&quot;')+'">'+city+'</option>').join("");
+  if(current&&cities().includes(current))sel.value=current;
+  else if(state.selectedCity&&cities().includes(state.selectedCity))sel.value=state.selectedCity;
+  else if(state.defaultCities[0])sel.value=state.defaultCities[0];
+}
+function renderWeeklyDayOptions(){
+  const city=$("#weeklyCitySelect")?.value,sel=$("#weeklyDaySelect"); if(!sel)return;
+  const row=state.rows.find(r=>r.city===city);
+  const days=weeklyDays(row);
+  const current=sel.value;
+  sel.innerHTML=days.map((d,i)=>'<option value="'+i+'">'+d.label+'</option>').join("");
+  if(current&&Number(current)<days.length)sel.value=current;
+  else sel.value="0";
+}
+function renderWeeklyForecast(){
+  const city=$("#weeklyCitySelect")?.value;
+  const index=Number($("#weeklyDaySelect")?.value||0);
+  const row=state.rows.find(r=>r.city===city);
+  const box=$("#weeklyResult");
+  if(!row||!box){return}
+  const days=weeklyDays(row),d=days[index]||days[0];
+  if(!d){box.innerHTML='<div class="weekly-empty">目前沒有可用的一週預報資料。</div>';return}
+  const c=d.riding||ridingCondition(d);
+  box.className="weekly-result weekly-"+c.level;
+  box.innerHTML=
+    '<div class="weekly-result-head"><div><div class="weekly-date-label">'+d.label+'</div><h3 class="weekly-title">'+row.city+'｜'+row.town+'</h3></div><div class="weekly-weather-icon">'+d.icon+'</div></div>'+
+    '<div class="weekly-temp-row"><strong class="weekly-temp">'+(d.minTemp==null?"--":d.minTemp.toFixed(0))+'°</strong><span class="weekly-temp-unit">最低</span><span class="weekly-temp-unit">/</span><strong class="weekly-temp">'+(d.maxTemp==null?"--":d.maxTemp.toFixed(0))+'°</strong><span class="weekly-temp-unit">最高</span></div>'+
+    '<div class="weekly-weather-name">'+d.weather+'</div>'+
+    '<div class="weekly-metrics"><div class="weekly-metric"><span>🌧️ 最高降雨機率</span><strong>'+(d.pop==null?"--":d.pop+" %")+'</strong></div><div class="weekly-metric"><span>💧 平均濕度</span><strong>'+(d.humidity==null?"--":d.humidity+" %")+'</strong></div><div class="weekly-metric"><span>💨 最大風速</span><strong>'+(d.windSpeed==null?"--":fmt(d.windSpeed," m/s"))+'</strong></div><div class="weekly-metric"><span>🧭 主要風向</span><strong>'+(d.windDirection||"--")+'</strong></div></div>'+
+    '<div class="weekly-riding"><span>🏍️ 騎乘條件</span><strong>'+c.icon+" "+c.label+"｜Score "+c.score+'</strong></div>';
+}
+function initWeeklyForecast(){
+  renderWeeklyCityOptions();
+  renderWeeklyDayOptions();
+  renderWeeklyForecast();
+}
+
 function status(a,b){$("#statusTitle").textContent=a;$("#statusText").textContent=b}
 async function loadWeather(){
   status("正在取得資料…","正在透過網站後端連線至中央氣象署。");$("#refreshBtn").disabled=true;$("#refreshBtn").textContent="取得資料中......";
@@ -597,7 +691,7 @@ async function loadWeather(){
     if(data?.success===false)throw new Error(data?.result?.message||data?.message||"CWA API 回傳錯誤");
     state.rows=parseRows(data);
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
-    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();renderTaiwanMap();
+    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();renderTaiwanMap();initWeeklyForecast();
     $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
   }catch(e){console.error(e);status("取得資料失敗",e.message)}finally{$("#refreshBtn").disabled=false;$("#refreshBtn").textContent="重新取得資料"}
@@ -607,6 +701,6 @@ $("#searchInput").addEventListener("input",renderSuggestions);
 $("#searchInput").addEventListener("keydown",handleSearchKeydown);
 $("#townSelect").addEventListener("change",e=>{if(!state.selectedCity)return;if(e.target.value)renderTownResult(state.selectedCity,e.target.value);else renderCityCards(state.selectedCity)});
 $("#clearSearchBtn").addEventListener("click",clearSearch);
-$("#analyzeRouteBtn").addEventListener("click",analyzeRoute);
+$("#analyzeRouteBtn").addEventListener("click",analyzeRoute);\n$("#weeklyCitySelect")?.addEventListener("change",()=>{renderWeeklyDayOptions();renderWeeklyForecast()});\n$("#weeklyDaySelect")?.addEventListener("change",renderWeeklyForecast);
 document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
 window.addEventListener("load",loadWeather);
