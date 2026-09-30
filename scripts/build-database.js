@@ -4,6 +4,13 @@ const Database = require("better-sqlite3");
 
 const API_KEY = process.env.CWA_API_KEY;
 const DATASET = "F-D0047-093";
+const WEEKLY_DATASET_IDS = [
+  "F-D0047-003","F-D0047-007","F-D0047-011","F-D0047-015","F-D0047-019",
+  "F-D0047-023","F-D0047-027","F-D0047-031","F-D0047-035","F-D0047-039",
+  "F-D0047-043","F-D0047-047","F-D0047-051","F-D0047-055","F-D0047-059",
+  "F-D0047-063","F-D0047-067","F-D0047-071","F-D0047-075","F-D0047-079",
+  "F-D0047-083","F-D0047-087"
+];
 const LOCATION_IDS = [
   "F-D0047-001","F-D0047-005","F-D0047-009","F-D0047-013",
   "F-D0047-017","F-D0047-021","F-D0047-025","F-D0047-029",
@@ -53,9 +60,8 @@ function validForecast(row) {
     );
 }
 
-async function fetchBatch(batch) {
-  const url = new URL("https://opendata.cwa.gov.tw/api/v1/rest/datastore/" + DATASET);
-  url.searchParams.set("locationId", batch.join(","));
+async function fetchDataset(datasetId) {
+  const url = new URL("https://opendata.cwa.gov.tw/api/v1/rest/datastore/" + datasetId);
   url.searchParams.set("Authorization", API_KEY);
   url.searchParams.set("format", "JSON");
 
@@ -71,20 +77,23 @@ async function fetchBatch(batch) {
         throw new Error(body?.message || body?.result?.message || `CWA API HTTP ${response.status}`);
       }
       if (!body?.records?.Locations) {
-        throw new Error("CWA API 回傳內容缺少 Locations");
+        throw new Error(`${datasetId} 回傳內容缺少 Locations`);
       }
+
+      console.log(`${datasetId}: 取得 ${body.records.Locations.length} 個縣市資料群組`);
       return body.records.Locations;
     } catch (error) {
       lastError = error;
       if (attempt < 4) {
         const delay = attempt * 2000;
-        console.warn(`CWA API 連線失敗，第 ${attempt} 次重試，${delay}ms 後再試：`, error.message);
+        console.warn(`${datasetId} 第 ${attempt} 次失敗，${delay}ms 後重試：`, error.message);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
   throw lastError;
 }
+
 
 function parseLocations(groups) {
   const locations = [];
@@ -185,9 +194,11 @@ async function main() {
   }
 
   fs.mkdirSync(DB_DIR, { recursive: true });
+  // 使用官方「各縣市未來 1 週」資料集。每個資料集包含該縣市全部鄉鎮，
+  // 共 22 個資料集，避免把 3 天資料集誤當成完整 7 天資料。
   const groups = [];
-  for (let i = 0; i < LOCATION_IDS.length; i += BATCH_SIZE) {
-    groups.push(...await fetchBatch(LOCATION_IDS.slice(i, i + BATCH_SIZE)));
+  for (const datasetId of WEEKLY_DATASET_IDS) {
+    groups.push(...await fetchDataset(datasetId));
   }
 
   const rows = parseLocations(groups);
