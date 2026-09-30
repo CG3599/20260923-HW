@@ -33,8 +33,14 @@ export default async function handler(req, res) {
         wf.wind_speed
       FROM weather_forecasts wf
       JOIN locations l ON l.id = wf.location_id
-      WHERE wf.forecast_time >= date('now', '+8 hours')
-        AND wf.forecast_time < date('now', '+8 hours', '+7 days')
+      WHERE wf.forecast_time >= (
+          SELECT date(MAX(forecast_time), '-6 days')
+          FROM weather_forecasts
+        )
+        AND wf.forecast_time < (
+          SELECT date(MAX(forecast_time), '+1 day')
+          FROM weather_forecasts
+        )
       ORDER BY l.city, l.town, wf.forecast_time
     `).all();
 
@@ -59,7 +65,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       source: "SQLite",
-      sql: "weather_forecasts JOIN locations + 取得現在起 7 天完整預報",
+      sql: "weather_forecasts JOIN locations + 以最新預報日期為基準取得完整 7 個日曆日",
       records: {
         Locations: rows
       },
