@@ -619,9 +619,16 @@ function renderThreeDayForecast(container,r){
   container.innerHTML="";
   const days=forecastDays(r);
   if(!days.length){container.innerHTML='<p class="muted">目前沒有可用的 7 日預報資料。</p>';return;}
-  container.innerHTML='<div class="forecast-charts">'+buildLineChart(days,"temp")+buildLineChart(days,"pop")+'</div><div class="three-day-forecast">'+
+  container.innerHTML='<div class="forecast-charts">'+buildLineChart(days,"temp")+buildLineChart(days,"pop")+'</div><div class="forecast-day-list">'+
     days.map(d=>'<div class="three-day-item"><div class="three-day-head"><strong>'+d.dateLabel+'</strong><span>'+d.key+'</span></div><div class="three-day-weather">'+icon(d.weather)+' '+d.weather+'</div><div class="three-day-values"><span>🌡️ '+(d.minTemp!=null?d.minTemp+"–"+d.maxTemp:"--")+' °C</span><span>🌧️ 降雨機率 '+(d.pop!=null?d.pop:"--")+' %</span><span>💧 濕度 '+(d.humidity!=null?d.humidity.toFixed(0):"--")+' %</span><span>💨 最高風速 '+(d.wind!=null?d.wind.toFixed(1):"--")+' m/s</span></div></div>').join("")+
     '</div>';
+}
+function bindForecastCollapse(details){
+  if(!details)return;
+  details.addEventListener("toggle",()=>{
+    const card=details.closest(".weather-card");
+    if(card)card.classList.toggle("forecast-expanded",details.open);
+  });
 }
 function renderRows(rows,showAll=false){
   const g=$("#weatherGrid");g.innerHTML="";
@@ -648,6 +655,7 @@ function renderRows(rows,showAll=false){
     n.querySelector(".decision-evidence").textContent=decision.evidence.join("、");
     n.querySelector(".forecast-time").textContent=r.start?"預報時間："+new Date(r.start).toLocaleString("zh-TW",{hour12:false}):"預報時間：--";
     renderThreeDayForecast(n.querySelector(".three-day-forecast"),r);
+    bindForecastCollapse(n.querySelector(".three-day-collapse"));
     check.checked=state.defaultCities.includes(r.city);
     check.addEventListener("change",()=>toggleDefault(r.city,check.checked));
     g.appendChild(n);
