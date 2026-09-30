@@ -1,5 +1,5 @@
 const API_URL="/api/weather";
-const state={rows:[],selectedCity:"",selectedTown:"",defaultCities:[],suggestionItems:[],suggestionIndex:-1};
+const state={rows:[],selectedCity:"",selectedTown:"",selectedDate:"",defaultCities:[],suggestionItems:[],suggestionIndex:-1};
 const DEFAULT_KEY="weatherDefaultCities";
 const $=s=>document.querySelector(s);
 
@@ -233,6 +233,71 @@ function ridingLevel(score){
 }
 
 function fmt(v,s=""){return v==null?"--":(Number.isInteger(v)?v:v.toFixed(1))+s}
+function taiwanDateKey(value){
+  const d=new Date(value);
+  if(Number.isNaN(d.getTime()))return "";
+  return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit"}).format(d);
+}
+function todayTaiwan(){
+  return taiwanDateKey(new Date());
+}
+function availableForecastDates(){
+  const set=new Set();
+  state.rows.forEach(r=>(r.forecast||[]).forEach(item=>{
+    const key=taiwanDateKey(item.start);
+    if(key)set.add(key);
+  }));
+  return [...set].sort().slice(0,7);
+}
+function formatForecastDate(key){
+  if(!key)return "";
+  const d=new Date(key+"T00:00:00+08:00");
+  if(Number.isNaN(d.getTime()))return key;
+  const label=new Intl.DateTimeFormat("zh-TW",{timeZone:"Asia/Taipei",month:"2-digit",day:"2-digit",weekday:"short"}).format(d);
+  const today=todayTaiwan();
+  const dates=availableForecastDates();
+  const index=dates.indexOf(key);
+  if(key===today)return "今天 · "+label;
+  if(index===1)return "明天 · "+label;
+  if(index===2)return "後天 · "+label;
+  return "第"+(index+1)+"天 · "+label;
+}
+function rowForDate(r,dateKey=state.selectedDate){
+  if(!r)return null;
+  const items=(r.forecast||[]).filter(x=>taiwanDateKey(x.start)===dateKey);
+  if(!items.length)return null;
+  const target=new Date(dateKey+"T12:00:00+08:00").getTime();
+  return items.slice().sort((a,b)=>Math.abs(new Date(a.start).getTime()-target)-Math.abs(new Date(b.start).getTime()-target))[0]||items[0];
+}
+function selectedRows(rows=state.rows){
+  const dateKey=state.selectedDate||todayTaiwan();
+  return rows.map(r=>rowForDate(r,dateKey)).filter(Boolean).map(x=>{
+    const base=state.rows.find(r=>r.city===x.city&&r.town===x.town)||x;
+    return {...x,forecast:base.forecast||x.forecast};
+  });
+}
+function populateForecastDateSelect(){
+  const sel=$("#forecastDateSelect");
+  if(!sel)return;
+  const dates=availableForecastDates();
+  const today=todayTaiwan();
+  state.selectedDate=dates.includes(state.selectedDate)?state.selectedDate:(dates.includes(today)?today:(dates[0]||""));
+  sel.innerHTML=dates.map(key=>'<option value="'+key+'">'+formatForecastDate(key)+'</option>').join("");
+  sel.value=state.selectedDate;
+}
+function refreshSelectedDateView(){
+  const rows=selectedRows();
+  if(state.selectedCity&&state.selectedTown){
+    const r=rows.find(x=>x.city===state.selectedCity&&x.town===state.selectedTown);
+    if(r)renderRows([r],false);
+    else renderDefaultCards();
+  }else if(state.selectedCity){
+    renderCityCards(state.selectedCity);
+  }else{
+    renderDefaultCards();
+  }
+  renderTaiwanMap();
+}
 function cities(){return [...new Set(state.rows.map(r=>r.city))]}
 function towns(city){return state.rows.filter(r=>r.city===city).sort((a,b)=>a.town.localeCompare(b.town,"zh-Hant"))}
 function cityRepresentative(city){const rs=towns(city);return rs[0]||null}
@@ -591,12 +656,12 @@ function populateTownSelect(city,selected=""){
   towns(city).forEach(r=>{const o=document.createElement("option");o.value=r.town;o.textContent=r.town;if(r.town===selected)o.selected=true;sel.appendChild(o)});
 }
 function renderTownResult(city,town){
-  const r=state.rows.find(x=>x.city===city&&x.town===town);if(!r)return;
+  const r=selectedRows().find(x=>x.city===city&&x.town===town);if(!r)return;
   openDefaultCities();
   renderRows([r],false);
   $("#searchHint").textContent="目前顯示："+city+"｜"+town+"。選擇其他鄉鎮即可切換。";
 }
-function renderCityCards(city){openDefaultCities();renderRows([cityRepresentative(city)].filter(Boolean),false);$("#searchHint").textContent="已選擇："+city+"，下方選單可查看該縣市所有鄉鎮。"}
+function renderCityCards(city){openDefaultCities();const r=selectedRows(towns(city));renderRows((r.length?r:[cityRepresentative(city)]).filter(Boolean),false);$("#searchHint").textContent="已選擇："+city+"，下方選單可查看該縣市所有鄉鎮。"}
 function forecastDays(r){
   const forecast=(r?.forecast||[]).filter(x=>x?.start).sort((a,b)=>new Date(a.start)-new Date(b.start));
   const days=new Map();
@@ -716,7 +781,7 @@ function toggleDefault(city,on){
   saveDefaults();renderDefaultCards();
 }
 function renderDefaultCards(){
-  const rows=state.defaultCities.map(city=>cityRepresentative(city)).filter(Boolean);
+  const rows=selectedRows(state.defaultCities.map(city=>cityRepresentative(city)).filter(Boolean));
   renderRows(rows,true);
   $("#searchHint").textContent="勾選「預設」即可讓該縣市在下次開啟網頁時自動出現；最多 9 個。";
 }
@@ -754,7 +819,7 @@ function renderTaiwanMap(){
   if(!taiwanMap)return;
   weatherMarkers.forEach(m=>m.remove());
   weatherMarkers=[];
-  const defaults=state.defaultCities.map(city=>cityRepresentative(city)).filter(r=>r&&Number.isFinite(r.latitude)&&Number.isFinite(r.longitude));
+  const defaults=selectedRows(state.defaultCities.map(city=>cityRepresentative(city)).filter(r=>r&&Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)));
   $("#mapCount").textContent=defaults.length+" 個預設地區";
   defaults.forEach(r=>{
     const s=weatherMarkerStyle(r);
@@ -786,6 +851,7 @@ async function loadWeather(){
     if(!res.ok)throw new Error(data?.message||data?.result?.message||("HTTP "+res.status));
     if(data?.success===false)throw new Error(data?.result?.message||data?.message||"CWA API 回傳錯誤");
     state.rows=parseRows(data);
+    populateForecastDateSelect();
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
     loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();renderTaiwanMap();
     $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
@@ -821,6 +887,10 @@ $("#townSelect").addEventListener("change",e=>{
   }else renderCityCards(state.selectedCity);
 });
 $("#clearSearchBtn").addEventListener("click",clearSearch);
+$("#forecastDateSelect").addEventListener("change",e=>{
+  state.selectedDate=e.target.value||todayTaiwan();
+  refreshSelectedDateView();
+});
 $("#analyzeRouteBtn").addEventListener("click",analyzeRoute);
 document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
 window.addEventListener("load",loadWeather);
