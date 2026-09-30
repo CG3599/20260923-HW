@@ -240,10 +240,28 @@ function populateRouteTown(side,city,selected=""){
   el.innerHTML='<option value="">請選擇鄉鎮</option>';
   towns(city).filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)).forEach(r=>{const o=document.createElement("option");o.value=routeOptionValue(r);o.textContent=r.town;if(r.town===selected)o.selected=true;el.appendChild(o);});
 }
+function focusNextRouteField(side){
+  setTimeout(()=>{
+    if(side==="from"){
+      const next=$("#routeToSearch");
+      if(next)next.focus();
+    }else{
+      const button=$("#analyzeRouteBtn");
+      if(button)button.focus();
+    }
+  },0);
+}
+function focusRouteTown(side){
+  setTimeout(()=>{
+    const town=routeSearchElements(side).town;
+    if(town)town.focus();
+  },0);
+}
 function setRouteLocation(side,r){
   const e=routeSearchElements(side); if(!r)return;
   e.value.value=routeOptionValue(r); e.input.value=r.town;
   e.townWrap.classList.add("hidden"); e.suggestions.classList.add("hidden");
+  focusNextRouteField(side);
 }
 function renderRouteSuggestions(side){
   const e=routeSearchElements(side),q=normalizeSearchText(e.input.value);
@@ -255,6 +273,7 @@ function renderRouteSuggestions(side){
   if(exactCity){
     e.suggestions.classList.add("hidden");e.townWrap.classList.remove("hidden");populateRouteTown(side,exactCity);
     e.input.dataset.city=exactCity;e.input.dataset.mode="city";e.value.value="";
+    focusRouteTown(side);
     return;
   }
   const items=[],seen=new Set();
@@ -268,6 +287,7 @@ function selectRouteSearch(side,m){
   const e=routeSearchElements(side); e.input.dataset.city=m.city;
   if(m.type==="town"){const r=findRouteRow(routeOptionValue({city:m.city,town:m.town}));setRouteLocation(side,r);return;}
   e.input.value=m.city;e.input.dataset.mode="city";e.value.value="";populateRouteTown(side,m.city);e.townWrap.classList.remove("hidden");e.suggestions.classList.add("hidden");
+  focusRouteTown(side);
 }
 function setupRouteSearch(side){
   const e=routeSearchElements(side); if(!e.input||e.input.dataset.ready)return;
@@ -440,6 +460,10 @@ function ensureDefaults(){
 function normalizeSearchText(value=""){
   return String(value).trim().replaceAll("臺","台").replaceAll("台灣","台灣");
 }
+function openDefaultCities(){
+  const panel=document.querySelector(".default-cities-collapse");
+  if(panel)panel.open=true;
+}
 function renderSuggestions(){
   const box=$("#suggestions"),q=normalizeSearchText($("#searchInput").value);
   state.suggestionItems=[];state.suggestionIndex=-1;
@@ -457,6 +481,7 @@ function renderSuggestions(){
     $("#searchHint").textContent="已輸入："+exactCity+"，請從下方下拉選單選擇該地區的鄉鎮。";
     box.classList.add("hidden");
     renderCityCards(exactCity);
+    openDefaultCities();
     return;
   }
 
@@ -524,6 +549,7 @@ function selectSearch(m){
     // 搜尋到鄉鎮時直接顯示該筆資料，不需要再選一次縣市。
     $("#townSelectWrap").classList.add("hidden");
     renderTownResult(m.city,m.town);
+    openDefaultCities();
     $("#searchHint").textContent="目前顯示："+m.city+"｜"+m.town+"（鄉鎮）。";
     return;
   }
@@ -532,6 +558,7 @@ function selectSearch(m){
   $("#townSelectWrap").classList.remove("hidden");
   $("#searchHint").textContent="已選擇："+m.city+"，請從下方下拉選單選擇該地區的鄉鎮。";
   renderCityCards(m.city);
+  openDefaultCities();
   setTimeout(()=>{$("#townSelect").focus();},0);
 }
 function populateTownSelect(city,selected=""){
@@ -540,10 +567,11 @@ function populateTownSelect(city,selected=""){
 }
 function renderTownResult(city,town){
   const r=state.rows.find(x=>x.city===city&&x.town===town);if(!r)return;
+  openDefaultCities();
   renderRows([r],false);
   $("#searchHint").textContent="目前顯示："+city+"｜"+town+"。選擇其他鄉鎮即可切換。";
 }
-function renderCityCards(city){renderRows([cityRepresentative(city)].filter(Boolean),false);$("#searchHint").textContent="已選擇："+city+"，下方選單可查看該縣市所有鄉鎮。"}
+function renderCityCards(city){openDefaultCities();renderRows([cityRepresentative(city)].filter(Boolean),false);$("#searchHint").textContent="已選擇："+city+"，下方選單可查看該縣市所有鄉鎮。"}
 function renderThreeDayForecast(container,r){
   container.innerHTML="";
   const forecast=(r?.forecast||[]).filter(x=>x?.start).sort((a,b)=>new Date(a.start)-new Date(b.start));
@@ -710,7 +738,13 @@ async function loadWeather(){
 $("#refreshAction").addEventListener("click",loadWeather);
 $("#searchInput").addEventListener("input",renderSuggestions);
 $("#searchInput").addEventListener("keydown",handleSearchKeydown);
-$("#townSelect").addEventListener("change",e=>{if(!state.selectedCity)return;if(e.target.value)renderTownResult(state.selectedCity,e.target.value);else renderCityCards(state.selectedCity)});
+$("#townSelect").addEventListener("change",e=>{
+  if(!state.selectedCity)return;
+  if(e.target.value){
+    renderTownResult(state.selectedCity,e.target.value);
+    openDefaultCities();
+  }else renderCityCards(state.selectedCity);
+});
 $("#clearSearchBtn").addEventListener("click",clearSearch);
 $("#analyzeRouteBtn").addEventListener("click",analyzeRoute);
 document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
