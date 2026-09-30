@@ -12,13 +12,8 @@
   <div class="actions"><button id="refreshBtn" class="primary">重新取得資料</button></div>
 </header>
 <main>
-<section class="status-card"><div><strong id="statusTitle">尚未取得氣象資料</strong><p id="statusText">正在連線至中央氣象署取得資料。</p></div><div class="updated"><span>最後更新</span><strong id="updatedAt">--</strong></div></section>
-<section class="summary-grid">
-<div class="summary-card"><span>縣市</span><strong id="cityCount">--</strong></div>
-<div class="summary-card"><span>平均溫度</span><strong id="avgTemp">--</strong></div>
-<div class="summary-card"><span>平均濕度</span><strong id="avgHumidity">--</strong></div>
-<div class="summary-card"><span>鄉鎮資料筆數</span><strong id="recordCount">--</strong></div>
-</section>
+
+
 
 <details class="score-explanation">
     <summary>📊 分數說明</summary>
@@ -102,6 +97,14 @@
   </div>
   <div id="taiwanMap" class="taiwan-map" aria-label="台灣氣象 GIS 地圖"></div>
   <p class="map-hint">點擊地圖上的鄉鎮標記，可查看溫度、濕度、降雨機率、風向與風速。</p>
+</section>
+
+<section class="status-card"><div><strong id="statusTitle">尚未取得氣象資料</strong><p id="statusText">正在連線至中央氣象署取得資料。</p></div><div class="updated"><span>最後更新</span><strong id="updatedAt">--</strong></div></section>
+<section class="summary-grid">
+<div class="summary-card"><span>縣市</span><strong id="cityCount">--</strong></div>
+<div class="summary-card"><span>平均溫度</span><strong id="avgTemp">--</strong></div>
+<div class="summary-card"><span>平均濕度</span><strong id="avgHumidity">--</strong></div>
+<div class="summary-card"><span>鄉鎮資料筆數</span><strong id="recordCount">--</strong></div>
 </section>
 
 <section class="source-card"><h2>資料說明</h2><p>本頁採用中央氣象署「鄉鎮天氣預報－全臺灣各鄉鎮市區預報資料」API，讀取溫度、相對濕度、降雨機率、風向與風速等欄位。</p><p class="muted">API 授權碼由 Vercel Environment Variables 安全管理，不會儲存在瀏覽器或 GitHub。預設縣市設定會保存在本機瀏覽器。</p></section>
