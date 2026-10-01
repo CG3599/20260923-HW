@@ -478,12 +478,46 @@ function nearestWeatherRow(lat,lon){
   return best?{row:best,distance:bestDistance}:null;
 }
 function routeClass(level){return level==="high"?"route-high":level==="caution"?"route-caution":level==="normal"?"route-normal":"route-good"}
+async function verifyOfficialRoadPolicy(routeCoords,route){
+  const steps=(route?.legs||[]).flatMap(leg=>leg?.steps||[]);
+  const refs=[...new Set(steps.map(step=>String(step?.ref||"").replaceAll("臺","台").trim()).filter(ref=>/^(台|臺)?(65|74|76|78|82|88)(甲)?$/.test(ref)))];
+  if(!refs.length){
+    return {ok:true,verification:"not-applicable",findings:[],pending:false};
+  }
+  const res=await fetch("/api/road-policy",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({coordinates:routeCoords,refs})
+  });
+  const data=await res.json().catch(()=>null);
+  if(!res.ok||!data?.ok){
+    return {
+      ok:true,
+      verification:"unavailable",
+      findings:[],
+      pending:true,
+      refs,
+      message:data?.message||"官方 GIS 驗證服務暫時無法取得。"
+    };
+  }
+  return {
+    ok:!data.forbidden,
+    verification:data.verification,
+    findings:data.findings||[],
+    pending:data.verification==="mileage-pending",
+    refs,
+    unavailable:data.unavailable||[],
+    stats:data.stats||null,
+    source:data.source||null
+  };
+}
+
 async function analyzeRoute(){
   const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
   if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return}
   if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return}
   const button=$("#analyzeRouteBtn");
-  button.disabled=true;button.textContent="正在規劃道路並檢查道路限制…";
+  button.disabled=true;button.textContent="正在規劃道路並檢查官方道路限制…";
   try{
     const base="https://router.project-osrm.org/route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude;
     const routeUrls=[
@@ -491,6 +525,8 @@ async function analyzeRoute(){
       base+"?overview=full&geometries=geojson&steps=true&alternatives=true&exclude=motorway"
     ];
     let data=null,selectedRoute=null,policyMode="normal",selectedVerification=null;
+    let officialVerification=null;
+
     for(let i=0;i<routeUrls.length;i++){
       try{
         const controller=new AbortController();
@@ -501,20 +537,43 @@ async function analyzeRoute(){
         let parsed=null;
         try{parsed=JSON.parse(text)}catch(_){}
         if(!res.ok||parsed?.code!=="Ok"||!parsed?.routes?.length)continue;
-        const routes=parsed.routes;
-        const safe=routes
-          .map(route=>({route,verification:window.RideSkyRoutePolicy?.verifyRoute?.(route)||{ok:!routeHasForbiddenNationalMain(route),expresswayMileagePending:false}}))
-          .find(item=>item.verification.ok);
-        if(safe){
-          data=parsed;
-          selectedRoute=safe.route;
-          selectedVerification=safe.verification;
-          policyMode=i===1?"exclude-motorway":"verified";
-          break;
+
+        for(const candidate of parsed.routes){
+          const localVerification=window.RideSkyRoutePolicy?.verifyRoute?.(candidate)
+            ||{ok:!routeHasForbiddenNationalMain(candidate),expresswayMileagePending:false};
+          if(!localVerification.ok)continue;
+
+          const candidateCoords=(candidate?.geometry?.coordinates||[]).map(p=>[p[1],p[0]]);
+          let official=null;
+          try{
+            official=await verifyOfficialRoadPolicy(candidateCoords,candidate);
+          }catch(error){
+            official={
+              ok:true,
+              verification:"unavailable",
+              findings:[],
+              pending:true,
+              message:error?.message||"官方 GIS 驗證服務暫時無法取得。"
+            };
+          }
+
+          // 官方 GIS 明確驗證到禁行區段時，直接淘汰此候選路線；
+          // 官方資料暫時不可用或缺少里程時，不把整條快速道路誤判為禁行。
+          if(official.ok){
+            data=parsed;
+            selectedRoute=candidate;
+            selectedVerification={...localVerification,official};
+            policyMode=i===1?"exclude-motorway":"verified";
+            officialVerification=official;
+            break;
+          }
         }
+        if(selectedRoute)break;
       }catch(_){}
     }
-    if(!selectedRoute)throw new Error("目前找不到避開國道主線的可行道路路線。國道甲線可行，但若唯一替代路線無法取得，請稍後再試。");
+
+    if(!selectedRoute)throw new Error("目前找不到同時避開國道主線與官方 GIS 已驗證禁行區段的可行道路路線。請稍後再試，或調整起終點。");
+
     const route=selectedRoute,coords=route.geometry.coordinates.map(p=>[p[1],p[0]]);
     const samples=sampleRoutePoints(coords,30);
     const nearby=[];
@@ -540,18 +599,24 @@ async function analyzeRoute(){
     const distanceKm=route.distance/1000,durationMin=Math.round(route.duration/60);
     const worstRain=Number.isFinite(worst.row.pop)?worst.row.pop:null;
     const policyText=policyMode==="exclude-motorway"
-      ? "🚫 已啟用：避開國道主線（OSRM exclude=motorway）"
+      ? "🚫 已啟用：避開國道主線（國道甲線保留）"
       : "🚫 已啟用：避開國道主線（國道甲線保留）";
-    const expresswayPending=Boolean(selectedVerification?.expresswayMileagePending);
-    const policyNote=expresswayPending
-      ? "國道主線已完成路線層檢查；此路線涉及台65、台74、台76、台78、台82或台88 等存在官方禁行里程區間的快速道路。由於目前 OSRM step 沒有官方公里數，這些區段標記為「待 GIS 里程驗證」，不會把整條快速道路誤判為禁行。"
-      : "國道主線已完成路線層檢查；省道快速道路原則保留，官方禁行里程資料已建檔，若路線未涉及上述受限路線則可直接通過目前政策檢查。";
+    const official=officialVerification||selectedVerification?.official||{};
+    const pending=official.verification==="mileage-pending"||official.verification==="unavailable"||Boolean(selectedVerification?.expresswayMileagePending);
+    const forbiddenVerified=(official.findings||[]).some(f=>f.status==="forbidden");
+    const policyNote=forbiddenVerified
+      ? "官方 GIS 已驗證此路線包含大型重型機車禁行快速道路區段，該候選路線已淘汰。"
+      : official.verification==="unavailable"
+        ? "國道主線已完成路線層檢查；公路局官方 GIS 暫時無法取得，因此快速道路限制維持「待驗證」，不把整條快速道路誤判為禁行。"
+        : official.verification==="mileage-pending"
+          ? "國道主線已完成路線層檢查；公路局官方 GIS 已找到相關道路，但部分路段缺少可對應的公里里程，故標記為「待 GIS 里程驗證」。"
+          : "國道主線與公路局官方 GIS 道路幾何／里程資料均已完成目前可驗證的政策檢查。";
     box.className="route-result "+routeClass(level.level);
     box.innerHTML=
       '<div class="route-result-head"><div class="route-result-title">'+from.city+"｜"+from.town+" → "+to.city+"｜"+to.town+'</div><strong class="route-result-level">'+level.icon+" "+level.label+'</strong></div>'+
       '<div class="route-policy-badge">'+policyText+'</div>'+
       '<div class="route-policy-note">'+policyNote+'</div>'+
-      (expresswayPending?'<div class="route-policy-pending">🟡 快速道路禁行里程：待 GIS 幾何／公里數驗證</div>':'')+
+      (pending?'<div class="route-policy-pending">🟡 快速道路禁行里程：'+(official.verification==="unavailable"?"官方 GIS 暫時無法取得":"待 GIS 幾何／公里數驗證")+'</div>':'')+
       '<div class="route-score-row"><div class="route-score"><strong>'+minScore+'</strong><span>最差 Score</span></div><div class="route-summary">依道路路線沿線 '+nearby.length+' 個氣象資料點分析。<br><strong>建議：'+decision.icon+" "+decision.label+'</strong><br>最需注意路段：'+worst.row.city+"｜"+worst.row.town+'</div></div>'+
       '<div class="route-evidence"><div><span>道路距離</span><strong>'+distanceKm.toFixed(1)+' km</strong></div><div><span>預估車程</span><strong>'+durationMin+' 分鐘</strong></div><div><span>沿線平均 Score</span><strong>'+avgScore.toFixed(1)+'</strong></div></div>'+
       '<div class="route-reasons">主要因素：'+(reasons.length?reasons.join("、"):"目前沒有明顯不利因素")+'<br><span>最需注意路段降雨機率：'+(worstRain==null?"--":worstRain+" %")+'</span></div>'+
@@ -569,12 +634,11 @@ async function analyzeRoute(){
   }catch(e){
     console.error(e);
     box.className="route-result";
-    box.innerHTML="<strong>路線分析失敗</strong><p class=\"route-hint\">"+e.message+"</p>";
+    box.innerHTML="<strong>路線分析失敗</strong><p class="route-hint">"+e.message+"</p>";
   }finally{
     button.disabled=false;button.textContent="分析這段路的可騎行性";
   }
 }
-
 function normalizeDefaultLocation(value){
   if(typeof value==="string"){
     const r=cityRepresentative(value);
