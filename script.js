@@ -851,20 +851,124 @@ function weatherMarkerStyle(r){
   return {radius:8,fillColor:"#38bdf8",color:"#bae6fd"};
 }
 
-function initTaiwanMap(){
+function cartoKeyUrl(url,key){
+  const separator=url.includes("?")?"&":"?";
+  return url+separator+"key="+encodeURIComponent(key);
+}
+
+function customizeRideSkyStyle(style,key){
+  const custom=JSON.parse(JSON.stringify(style));
+  custom.name="RideSky Vector Basemap";
+  custom.sources=custom.sources||{};
+  Object.values(custom.sources).forEach(source=>{
+    if(source&&typeof source.url==="string")source.url=cartoKeyUrl(source.url,key);
+  });
+  if(custom.sprite)custom.sprite=cartoKeyUrl(custom.sprite,key);
+  if(custom.glyphs)custom.glyphs=cartoKeyUrl(custom.glyphs,key);
+
+  const colors={
+    background:"#071522",
+    land:"#0b1d2b",
+    park:"#0d2631",
+    water:"#0a2f4a",
+    waterway:"#1c6682",
+    boundary:"#29485e",
+    motorway:"#6f9bb5",
+    trunk:"#5f8ca6",
+    primary:"#4f7890",
+    secondary:"#3c5e73",
+    tertiary:"#304d61",
+    minor:"#263f52",
+    service:"#203747",
+    path:"#24485d",
+    rail:"#35566b",
+    building:"#102536",
+    text:"#b9d3e2",
+    textStrong:"#d8e8f2",
+    textHalo:"#071522"
+  };
+
+  for(const layer of custom.layers||[]){
+    const sourceLayer=layer["source-layer"]||"";
+    const id=String(layer.id||"");
+    const filter=JSON.stringify(layer.filter||[]);
+    layer.paint=layer.paint||{};
+
+    if(layer.type==="background"){
+      layer.paint["background-color"]=colors.background;
+      continue;
+    }
+
+    if(layer.type==="fill"||layer.type==="fill-extrusion"){
+      if(sourceLayer==="water")layer.paint["fill-color"]=colors.water;
+      else if(sourceLayer==="landcover"||sourceLayer==="park")layer.paint["fill-color"]=colors.park;
+      else if(sourceLayer==="landuse")layer.paint["fill-color"]=colors.land;
+      else if(sourceLayer==="building")layer.paint["fill-color"]=colors.building;
+      continue;
+    }
+
+    if(layer.type==="line"){
+      if(sourceLayer==="waterway")layer.paint["line-color"]=colors.waterway;
+      else if(sourceLayer==="boundary"){
+        layer.paint["line-color"]=colors.boundary;
+        layer.paint["line-opacity"]=0.55;
+      }else if(sourceLayer==="transportation"){
+        let road=colors.minor;
+        if(filter.includes('"motorway"'))road=colors.motorway;
+        else if(filter.includes('"trunk"'))road=colors.trunk;
+        else if(filter.includes('"primary"'))road=colors.primary;
+        else if(filter.includes('"secondary"'))road=colors.secondary;
+        else if(filter.includes('"tertiary"'))road=colors.tertiary;
+        else if(filter.includes('"service"'))road=colors.service;
+        else if(filter.includes('"path"'))road=colors.path;
+        else if(filter.includes('"rail"'))road=colors.rail;
+        if(id.includes("_case"))road="#12293a";
+        layer.paint["line-color"]=road;
+      }else if(sourceLayer==="aeroway"){
+        layer.paint["line-color"]="#29485e";
+      }
+      continue;
+    }
+
+    if(layer.type==="symbol"){
+      if(layer.paint["text-color"]!==undefined)layer.paint["text-color"]=sourceLayer==="place"?colors.textStrong:colors.text;
+      if(layer.paint["text-halo-color"]!==undefined)layer.paint["text-halo-color"]=colors.textHalo;
+      if(layer.paint["icon-color"]!==undefined)layer.paint["icon-color"]="#6f93a8";
+      if(sourceLayer==="poi"){
+        if(layer.paint["text-opacity"]===undefined)layer.paint["text-opacity"]=0.62;
+        if(layer.paint["icon-opacity"]===undefined)layer.paint["icon-opacity"]=0.55;
+      }
+    }
+  }
+  return custom;
+}
+
+async function initTaiwanMap(){
   if(taiwanMap||typeof L==="undefined")return;
   const key=loadCartoBasemapKey();
-  taiwanMap=L.map("taiwanMap",{zoomControl:true,preferCanvas:true}).setView([23.7,121.0],7);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key="+encodeURIComponent(key),{
-    maxZoom:20,
-    subdomains:"abcd",
-    attribution:"&copy; OpenStreetMap contributors &copy; CARTO",
-    className:"ridesky-basemap"
+  const styleUrl=cartoKeyUrl("https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",key);
+  const response=await fetch(styleUrl,{cache:"no-store"});
+  if(!response.ok)throw new Error("CARTO Vector Basemap 載入失敗（HTTP "+response.status+"）。");
+  const style=customizeRideSkyStyle(await response.json(),key);
+
+  taiwanMap=L.map("taiwanMap",{
+    zoomControl:true,
+    preferCanvas:true,
+    minZoom:5,
+    maxZoom:18,
+    maxBounds:[[21.5,118.0],[26.5,123.0]],
+    maxBoundsViscosity:0.9
+  }).setView([23.7,121.0],7);
+
+  L.maplibreGL({
+    style,
+    interactive:false,
+    attribution:"&copy; OpenStreetMap contributors, &copy; CARTO"
   }).addTo(taiwanMap);
 }
 
-function renderTaiwanMap(){
-  initTaiwanMap();
+async function renderTaiwanMap(){
+  await initTaiwanMap();
   if(!taiwanMap)return;
   weatherMarkers.forEach(m=>m.remove());
   weatherMarkers=[];
@@ -917,7 +1021,7 @@ async function loadWeather(){
     }
     populateForecastDateSelect();
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
-    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();renderTaiwanMap();
+    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();await renderTaiwanMap();
     $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
     statusEl.textContent="取得成功 ✓";
