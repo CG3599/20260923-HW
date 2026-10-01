@@ -853,19 +853,21 @@ async function loadWeather(){
     if(!res.ok)throw new Error(data?.message||data?.result?.message||("HTTP "+res.status));
     if(data?.success===false)throw new Error(data?.result?.message||data?.message||"CWA API 回傳錯誤");
     state.rows=parseRows(data);
-    const metaDates=data?.meta?.minForecastDate&&data?.meta?.maxForecastDate
-      ? (() => {
-          const out=[];
-          const cursor=new Date(data.meta.minForecastDate+"T00:00:00+08:00");
-          const end=new Date(data.meta.maxForecastDate+"T00:00:00+08:00");
-          while(cursor<=end&&out.length<7){
-            out.push(taiwanDateKey(cursor.toISOString()));
-            cursor.setDate(cursor.getDate()+1);
-          }
-          return out;
-        })()
+    // 日期選單直接使用 API 明確提供的 7 個預報日期；若舊版 API 尚未提供，
+    // 再從實際回傳的 SQLite forecast rows 推導，避免日期選單空白。
+    const apiDates=Array.isArray(data?.meta?.forecastDates)
+      ? data.meta.forecastDates.map(String).filter(Boolean)
       : [];
-    state.forecastDates=metaDates.length===7?metaDates:[];
+    const rowDates=[...new Set(
+      state.rows.flatMap(r=>(r.forecast||[]).map(item=>taiwanDateKey(item.start))).filter(Boolean)
+    )].sort();
+    const fallbackDates=apiDates.length===7?apiDates:rowDates.slice(-7);
+    state.forecastDates=fallbackDates.length===7?fallbackDates:[];
+    if(!state.forecastDates.length){
+      console.warn("預報日期建立失敗：API meta 與 SQLite rows 都沒有 7 個有效日期。",{
+        apiDates,rowDates
+      });
+    }
     populateForecastDateSelect();
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
     loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();renderTaiwanMap();
