@@ -102,6 +102,49 @@ window.RideSkyRoutePolicy = {
     );
   },
 
+
+  verifyRoute(route) {
+    const steps=(route?.legs||[]).flatMap(leg=>leg?.steps||[]);
+    const findings=[];
+    let nationalMainForbidden=false;
+    let expresswayMileagePending=false;
+
+    for(const step of steps){
+      const ref=String(step?.ref||"").trim();
+      const name=String(step?.name||"").trim();
+      const destinations=String(step?.destinations||"").trim();
+      const text=[ref,name,destinations].join(" ").replaceAll("臺","台");
+
+      if(this.forbiddenNationalMain(ref,text)){
+        nationalMainForbidden=true;
+        findings.push({type:"national-main",status:"forbidden",ref,text});
+        continue;
+      }
+
+      const normalized=this.normalizeRef(ref);
+      if(window.RIDESKY_ROUTE_POLICY.provincialExpressways.forbidden.some(seg=>this.normalizeRef(seg.ref)===normalized)){
+        expresswayMileagePending=true;
+        findings.push({
+          type:"expressway-mileage",
+          status:"pending",
+          ref:normalized,
+          text,
+          note:"此路線編號存在官方禁行里程區間，但目前 OSRM step 未提供可驗證的官方公里數。"
+        });
+      }
+    }
+
+    return {
+      ok:!nationalMainForbidden,
+      nationalMainForbidden,
+      expresswayMileagePending,
+      findings,
+      verification: expresswayMileagePending
+        ? "national-freeway-verified; expressway-mileage-pending"
+        : "national-freeway-verified"
+    };
+  },
+
   summary() {
     return {
       nationalMain: "forbidden",
