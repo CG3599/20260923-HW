@@ -927,7 +927,8 @@ function startRouteMotorcycleAnimation(coords){
   });
   routeMotorcycleMarker=L.marker([points[0].lat,points[0].lng],{icon,zIndexOffset:1000,interactive:false}).addTo(taiwanMap);
 
-  const duration=Math.min(60000,Math.max(18000,total/25*1000));
+  // 提高動畫速度：約 45 m/s，並縮短長路線的最長動畫時間。
+  const duration=Math.min(45000,Math.max(12000,total/45*1000));
   const start=performance.now();
 
   function frame(now){
@@ -945,7 +946,8 @@ function startRouteMotorcycleAnimation(coords){
 
     const bearing=routeBearing([a.lat,a.lng],[b.lat,b.lng]);
     const el=routeMotorcycleMarker.getElement()?.querySelector("span");
-    if(el)el.style.transform="rotate("+bearing+"deg)";
+    // Emoji 🏍️ 的視覺朝向與 Leaflet bearing 基準不同，固定順時針修正 90°。
+    if(el)el.style.transform="rotate("+(bearing+90)+"deg)";
 
     if(progress<1){
       routeAnimationFrame=requestAnimationFrame(frame);
