@@ -94,7 +94,28 @@
     <div><div class="eyebrow">TAIWAN WEATHER MAP</div><h2>台灣氣象地圖</h2></div>
     <span id="mapCount" class="map-count">-- 個鄉鎮</span>
   </div>
-  <div id="taiwanMap" class="taiwan-map" aria-label="台灣氣象 GIS 地圖"></div>
+  <div class="map-wrap">
+    <div id="taiwanMap" class="taiwan-map" aria-label="台灣氣象 GIS 地圖"></div>
+    <aside class="map-riding-legend" aria-label="騎乘條件圖例">
+      <div class="map-riding-legend-title">🏍️ 騎乘條件</div>
+      <div class="map-riding-legend-item">
+        <span class="map-riding-dot map-riding-good">🟢</span>
+        <div><strong>良好</strong><small>適合一般騎乘</small></div>
+      </div>
+      <div class="map-riding-legend-item">
+        <span class="map-riding-dot map-riding-normal">🟡</span>
+        <div><strong>普通</strong><small>可騎，注意環境</small></div>
+      </div>
+      <div class="map-riding-legend-item">
+        <span class="map-riding-dot map-riding-caution">🟠</span>
+        <div><strong>需注意</strong><small>建議降低速度</small></div>
+      </div>
+      <div class="map-riding-legend-item">
+        <span class="map-riding-dot map-riding-high">🔴</span>
+        <div><strong>高風險</strong><small>需特別留意天氣條件</small></div>
+      </div>
+    </aside>
+  </div>
   <p class="map-hint">點擊地圖上的鄉鎮標記，可查看溫度、濕度、降雨機率、風向與風速。</p>
 </section>
 <section class="status-card"><div><strong id="statusTitle">尚未取得氣象資料</strong><p id="statusText">正在連線至中央氣象署取得資料。</p></div><div class="updated"><span>最後更新</span><strong id="updatedAt">--</strong></div></section>
