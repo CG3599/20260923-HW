@@ -858,7 +858,8 @@ function initTaiwanMap(){
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key="+encodeURIComponent(key),{
     maxZoom:20,
     subdomains:"abcd",
-    attribution:"&copy; OpenStreetMap contributors &copy; CARTO"
+    attribution:"&copy; OpenStreetMap contributors &copy; CARTO",
+    className:"ridesky-basemap"
   }).addTo(taiwanMap);
 }
 
