@@ -255,14 +255,8 @@ function formatForecastDate(key){
   if(!key)return "";
   const d=new Date(key+"T00:00:00+08:00");
   if(Number.isNaN(d.getTime()))return key;
-  const label=new Intl.DateTimeFormat("zh-TW",{timeZone:"Asia/Taipei",month:"2-digit",day:"2-digit",weekday:"short"}).format(d);
-  const today=todayTaiwan();
-  const dates=availableForecastDates();
-  const index=dates.indexOf(key);
-  if(key===today)return "今天 · "+label;
-  if(index===1)return "明天 · "+label;
-  if(index===2)return "後天 · "+label;
-  return "第"+(index+1)+"天 · "+label;
+  const label=new Intl.DateTimeFormat("zh-TW",{timeZone:"Asia/Taipei",month:"numeric",day:"numeric",weekday:"short"}).format(d);
+  return label.replace(/\\s+/g,"");
 }
 function rowForDate(r,dateKey=state.selectedDate){
   if(!r)return null;
