@@ -445,3 +445,19 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
   font-size:.68rem;
   line-height:1.55;
 }
+
+.route-policy-pending{
+  display:inline-flex;
+  align-items:center;
+  width:max-content;
+  max-width:100%;
+  margin:0 0 10px;
+  padding:6px 9px;
+  border:1px solid rgba(250,204,21,.18);
+  border-radius:8px;
+  background:rgba(71,55,8,.28);
+  color:#d7c98a;
+  font-size:.68rem;
+  font-weight:800;
+  line-height:1.4;
+}
