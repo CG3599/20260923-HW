@@ -480,7 +480,9 @@ function nearestWeatherRow(lat,lon){
 function routeClass(level){return level==="high"?"route-high":level==="caution"?"route-caution":level==="normal"?"route-normal":"route-good"}
 
 async function analyzeRoute(){
+  clearRouteMotorcycleAnimation();
   const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
+($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
   if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return}
   if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return}
   const button=$("#analyzeRouteBtn");
@@ -561,6 +563,7 @@ async function analyzeRoute(){
       if(routeLayer)routeLayer.remove();
       routeLayer=L.polyline(coords,{color:"#7dd3fc",weight:5,opacity:.85}).addTo(taiwanMap);
       const bounds=L.latLngBounds(coords);taiwanMap.fitBounds(bounds.pad(.12));
+      startRouteMotorcycleAnimation(coords);
     }
   }catch(e){
     console.error(e);
@@ -876,6 +879,84 @@ function summary(){
 let taiwanMap=null;
 let weatherMarkers=[];
 let routeLayer=null;
+let routeMotorcycleMarker=null;
+let routeAnimationFrame=null;
+let routeAnimationToken=0;
+
+function clearRouteMotorcycleAnimation(){
+  routeAnimationToken++;
+  if(routeAnimationFrame!=null)cancelAnimationFrame(routeAnimationFrame);
+  routeAnimationFrame=null;
+  if(routeMotorcycleMarker&&taiwanMap){
+    taiwanMap.removeLayer(routeMotorcycleMarker);
+  }
+  routeMotorcycleMarker=null;
+}
+
+function routeDistance(a,b){
+  const R=6371000,rad=Math.PI/180;
+  const dLat=(b[0]-a[0])*rad,dLng=(b[1]-a[1])*rad;
+  const x=Math.sin(dLat/2)**2+Math.cos(a[0]*rad)*Math.cos(b[0]*rad)*Math.sin(dLng/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+function routeBearing(a,b){
+  const rad=Math.PI/180;
+  const lat1=a[0]*rad,lat2=b[0]*rad,dLng=(b[1]-a[1])*rad;
+  const y=Math.sin(dLng)*Math.cos(lat2);
+  const x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLng);
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+
+function startRouteMotorcycleAnimation(coords){
+  clearRouteMotorcycleAnimation();
+  if(!taiwanMap||!Array.isArray(coords)||coords.length<2)return;
+  const token=routeAnimationToken;
+  const points=[];
+  let total=0;
+  for(let i=0;i<coords.length;i++){
+    if(i>0)total+=routeDistance(coords[i-1],coords[i]);
+    points.push({lat:coords[i][0],lng:coords[i][1],distance:total});
+  }
+  if(total<=0)return;
+
+  const icon=L.divIcon({
+    className:"route-motorcycle-marker",
+    html:"<span>🏍️</span>",
+    iconSize:[34,34],
+    iconAnchor:[17,17]
+  });
+  routeMotorcycleMarker=L.marker([points[0].lat,points[0].lng],{icon,zIndexOffset:1000,interactive:false}).addTo(taiwanMap);
+
+  const duration=Math.min(60000,Math.max(18000,total/25*1000));
+  const start=performance.now();
+
+  function frame(now){
+    if(token!==routeAnimationToken||!routeMotorcycleMarker)return;
+    const progress=Math.min(1,(now-start)/duration);
+    const target=total*progress;
+    let i=1;
+    while(i<points.length&&points[i].distance<target)i++;
+    if(i>=points.length)i=points.length-1;
+    const a=points[i-1],b=points[i],span=Math.max(1,b.distance-a.distance);
+    const local=Math.min(1,Math.max(0,(target-a.distance)/span));
+    const lat=a.lat+(b.lat-a.lat)*local;
+    const lng=a.lng+(b.lng-a.lng)*local;
+    routeMotorcycleMarker.setLatLng([lat,lng]);
+
+    const bearing=routeBearing([a.lat,a.lng],[b.lat,b.lng]);
+    const el=routeMotorcycleMarker.getElement()?.querySelector("span");
+    if(el)el.style.transform="rotate("+bearing+"deg)";
+
+    if(progress<1){
+      routeAnimationFrame=requestAnimationFrame(frame);
+    }else{
+      routeAnimationFrame=null;
+      routeMotorcycleMarker.setLatLng([points[points.length-1].lat,points[points.length-1].lng]);
+    }
+  }
+  routeAnimationFrame=requestAnimationFrame(frame);
+}
 
 function weatherMarkerStyle(r){
   const riding=r?.riding||ridingCondition(r);
