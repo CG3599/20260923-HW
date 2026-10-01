@@ -943,13 +943,52 @@ function customizeRideSkyStyle(style,key){
   return custom;
 }
 
-async function initTaiwanMap(){
-  if(taiwanMap||typeof L==="undefined")return;
-  const key=loadCartoBasemapKey();
+let mapLibrePromise=null;
+function loadMapLibreAssets(){
+  if(window.maplibregl&&L.maplibreGL)return Promise.resolve();
+  if(mapLibrePromise)return mapLibrePromise;
+  mapLibrePromise=new Promise((resolve,reject)=>{
+    const css=document.createElement("link");
+    css.rel="stylesheet";
+    css.href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css";
+    document.head.appendChild(css);
+
+    const mapScript=document.createElement("script");
+    mapScript.src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js";
+    mapScript.onload=()=>{
+      const bridge=document.createElement("script");
+      bridge.src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.3/leaflet-maplibre-gl.js";
+      bridge.onload=resolve;
+      bridge.onerror=()=>reject(new Error("MapLibre Leaflet 整合套件載入失敗。"));
+      document.head.appendChild(bridge);
+    };
+    mapScript.onerror=()=>reject(new Error("MapLibre GL 載入失敗。"));
+    document.head.appendChild(mapScript);
+  });
+  return mapLibrePromise;
+}
+
+async function getRideSkyVectorStyle(key){
+  const cacheKey="rideskyVectorStyleV1";
+  try{
+    const cached=JSON.parse(localStorage.getItem(cacheKey)||"null");
+    if(cached?.style?.version&&cached?.savedAt&&Date.now()-cached.savedAt<86400000){
+      return customizeRideSkyStyle(cached.style,key);
+    }
+  }catch(_){}
   const styleUrl=cartoKeyUrl("https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",key);
   const response=await fetch(styleUrl,{cache:"force-cache"});
   if(!response.ok)throw new Error("CARTO Vector Basemap 載入失敗（HTTP "+response.status+"）。");
-  const style=customizeRideSkyStyle(await response.json(),key);
+  const style=await response.json();
+  try{localStorage.setItem(cacheKey,JSON.stringify({savedAt:Date.now(),style}));}catch(_){}
+  return customizeRideSkyStyle(style,key);
+}
+
+async function initTaiwanMap(){
+  if(taiwanMap||typeof L==="undefined")return;
+  const key=loadCartoBasemapKey();
+  await loadMapLibreAssets();
+  const style=await getRideSkyVectorStyle(key);
 
   taiwanMap=L.map("taiwanMap",{
     zoomControl:true,
