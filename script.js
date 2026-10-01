@@ -849,9 +849,10 @@ function weatherMarkerStyle(r){
 function initTaiwanMap(){
   if(taiwanMap||typeof L==="undefined")return;
   taiwanMap=L.map("taiwanMap",{zoomControl:true,preferCanvas:true}).setView([23.7,121.0],7);
-  L.tileLayer("https://wmts.nlsc.gov.tw/wmts/EMAP/default/EPSG:3857/{z}/{y}/{x}",{
-    maxZoom:19,
-    attribution:"&copy; OpenStreetMap &copy; CARTO"
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+    maxZoom:20,
+    subdomains:"abcd",
+    attribution:"&copy; OpenStreetMap contributors &copy; CARTO"
   }).addTo(taiwanMap);
 }
 
