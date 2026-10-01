@@ -490,7 +490,7 @@ async function analyzeRoute(){
       base+"?overview=full&geometries=geojson&steps=true&alternatives=true",
       base+"?overview=full&geometries=geojson&steps=true&alternatives=true&exclude=motorway"
     ];
-    let data=null,selectedRoute=null,policyMode="normal";
+    let data=null,selectedRoute=null,policyMode="normal",selectedVerification=null;
     for(let i=0;i<routeUrls.length;i++){
       try{
         const controller=new AbortController();
@@ -502,9 +502,14 @@ async function analyzeRoute(){
         try{parsed=JSON.parse(text)}catch(_){}
         if(!res.ok||parsed?.code!=="Ok"||!parsed?.routes?.length)continue;
         const routes=parsed.routes;
-        const safe=routes.find(route=>!routeHasForbiddenNationalMain(route));
+        const safe=routes
+          .map(route=>({route,verification:window.RideSkyRoutePolicy?.verifyRoute?.(route)||{ok:!routeHasForbiddenNationalMain(route),expresswayMileagePending:false}}))
+          .find(item=>item.verification.ok);
         if(safe){
-          data=parsed;selectedRoute=safe;policyMode=i===1?"exclude-motorway":"verified";
+          data=parsed;
+          selectedRoute=safe.route;
+          selectedVerification=safe.verification;
+          policyMode=i===1?"exclude-motorway":"verified";
           break;
         }
       }catch(_){}
@@ -537,12 +542,16 @@ async function analyzeRoute(){
     const policyText=policyMode==="exclude-motorway"
       ? "🚫 已啟用：避開國道主線（OSRM exclude=motorway）"
       : "🚫 已啟用：避開國道主線（國道甲線保留）";
-    const policyNote="快速道路原則保留；台65、台74、台76、台78、台82、台88 的官方禁行區段已建立為 RideSky 路線政策資料，後續 GIS 驗證會再逐段套用。";
+    const expresswayPending=Boolean(selectedVerification?.expresswayMileagePending);
+    const policyNote=expresswayPending
+      ? "國道主線已完成路線層檢查；此路線涉及台65、台74、台76、台78、台82或台88 等存在官方禁行里程區間的快速道路。由於目前 OSRM step 沒有官方公里數，這些區段標記為「待 GIS 里程驗證」，不會把整條快速道路誤判為禁行。"
+      : "國道主線已完成路線層檢查；省道快速道路原則保留，官方禁行里程資料已建檔，若路線未涉及上述受限路線則可直接通過目前政策檢查。";
     box.className="route-result "+routeClass(level.level);
     box.innerHTML=
       '<div class="route-result-head"><div class="route-result-title">'+from.city+"｜"+from.town+" → "+to.city+"｜"+to.town+'</div><strong class="route-result-level">'+level.icon+" "+level.label+'</strong></div>'+
       '<div class="route-policy-badge">'+policyText+'</div>'+
       '<div class="route-policy-note">'+policyNote+'</div>'+
+      (expresswayPending?'<div class="route-policy-pending">🟡 快速道路禁行里程：待 GIS 幾何／公里數驗證</div>':'')+
       '<div class="route-score-row"><div class="route-score"><strong>'+minScore+'</strong><span>最差 Score</span></div><div class="route-summary">依道路路線沿線 '+nearby.length+' 個氣象資料點分析。<br><strong>建議：'+decision.icon+" "+decision.label+'</strong><br>最需注意路段：'+worst.row.city+"｜"+worst.row.town+'</div></div>'+
       '<div class="route-evidence"><div><span>道路距離</span><strong>'+distanceKm.toFixed(1)+' km</strong></div><div><span>預估車程</span><strong>'+durationMin+' 分鐘</strong></div><div><span>沿線平均 Score</span><strong>'+avgScore.toFixed(1)+'</strong></div></div>'+
       '<div class="route-reasons">主要因素：'+(reasons.length?reasons.join("、"):"目前沒有明顯不利因素")+'<br><span>最需注意路段降雨機率：'+(worstRain==null?"--":worstRain+" %")+'</span></div>'+
