@@ -947,7 +947,7 @@ async function initTaiwanMap(){
   if(taiwanMap||typeof L==="undefined")return;
   const key=loadCartoBasemapKey();
   const styleUrl=cartoKeyUrl("https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",key);
-  const response=await fetch(styleUrl,{cache:"no-store"});
+  const response=await fetch(styleUrl,{cache:"force-cache"});
   if(!response.ok)throw new Error("CARTO Vector Basemap 載入失敗（HTTP "+response.status+"）。");
   const style=customizeRideSkyStyle(await response.json(),key);
 
@@ -968,7 +968,13 @@ async function initTaiwanMap(){
 }
 
 async function renderTaiwanMap(){
-  await initTaiwanMap();
+  try{
+    await initTaiwanMap();
+  }catch(error){
+    console.error("RideSky Vector Basemap 載入失敗",error);
+    $("#mapCount").textContent="地圖載入失敗，請稍後重試";
+    return;
+  }
   if(!taiwanMap)return;
   weatherMarkers.forEach(m=>m.remove());
   weatherMarkers=[];
@@ -1021,7 +1027,8 @@ async function loadWeather(){
     }
     populateForecastDateSelect();
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
-    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();await renderTaiwanMap();
+    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();
+    renderTaiwanMap();
     $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
     statusEl.textContent="取得成功 ✓";
