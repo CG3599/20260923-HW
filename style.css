@@ -31,6 +31,28 @@ h1,h2,h3,p{margin-top:0}.topbar h1{font-size:clamp(2rem,5vw,3.4rem);margin-botto
 .suggestions{position:absolute;left:0;right:0;top:74px;max-height:500px;overflow-y:auto;background:#111a30;border:1px solid #34415e;border-radius:12px;z-index:5;box-shadow:0 12px 28px #0006;scrollbar-width:thin}
 .suggestion{width:100%;text-align:left;background:transparent;color:#eef2ff;border-radius:0;border-bottom:1px solid #26324b;padding:11px 14px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}.suggestion span{font-size:.95rem;font-weight:650;color:#dfe7f7}.suggestion small{font-size:.68rem;font-weight:400;color:#66748f;white-space:nowrap}.suggestion:last-child{border-bottom:0}.suggestion:hover,.suggestion.active{background:#1b2946}
 .date-picker-field{position:relative}
+.search-field select{
+  appearance:auto;
+  -webkit-appearance:auto;
+  background-color:#0d1528;
+  color:#eef2ff;
+  color-scheme:dark;
+  cursor:pointer;
+}
+.search-field select option{
+  background:#111a30;
+  color:#eef2ff;
+}
+.search-field select option:checked{
+  background:#1b2946;
+  color:#ffffff;
+}
+.search-field select:hover{
+  border-color:#465778;
+}
+.search-field select:focus{
+  box-shadow:0 0 0 3px #7dd3fc22;
+}
 .date-picker-field select{appearance:none;width:100%;background:linear-gradient(135deg,#111a30,#17213a);color:#eef2ff;border:1px solid #34415e;border-radius:13px;padding:12px 42px 12px 14px;outline:none;font-weight:700;cursor:pointer;box-shadow:inset 0 1px #ffffff08}
 .date-picker-field:after{content:"⌄";position:absolute;right:15px;bottom:10px;color:#7dd3fc;font-size:1.15rem;pointer-events:none}
 .date-picker-field select:hover{border-color:#4f668d;background:linear-gradient(135deg,#15213b,#1b2a48)}
