@@ -690,7 +690,7 @@ function renderTownResult(city,town){
   renderRows([r],false);
   $("#searchHint").textContent="目前顯示："+city+"｜"+town+"。選擇其他鄉鎮即可切換。";
 }
-function renderCityCards(city){openDefaultCities();const r=selectedRows(towns(city));renderRows((r.length?r:[cityRepresentative(city)]).filter(Boolean),false);$("#searchHint").textContent="已選擇："+city+"，下方選單可查看該縣市所有鄉鎮。"}
+function renderCityCards(city){openDefaultCities();$("#weatherGrid").innerHTML="";$("#searchHint").textContent="已選擇："+city+"，請從下方下拉選單選擇鄉鎮；選擇後才會顯示該鄉鎮資料。"}
 function forecastDays(r){
   const forecast=(r?.forecast||[]).filter(x=>x?.start).sort((a,b)=>new Date(a.start)-new Date(b.start));
   const days=new Map();
@@ -860,7 +860,7 @@ function renderTaiwanMap(){
   if(!taiwanMap)return;
   weatherMarkers.forEach(m=>m.remove());
   weatherMarkers=[];
-  const defaults=selectedRows(state.defaultCities.map(city=>cityRepresentative(city)).filter(r=>r&&Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)));
+  const defaults=selectedRows(state.defaultLocations.map(d=>state.rows.find(r=>r.city===d.city&&r.town===d.town)).filter(r=>r&&Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)));
   $("#mapCount").textContent=defaults.length+" 個預設地區";
   defaults.forEach(r=>{
     const s=weatherMarkerStyle(r);
