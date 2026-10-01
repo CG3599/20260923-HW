@@ -845,10 +845,16 @@ let weatherMarkers=[];
 let routeLayer=null;
 
 function weatherMarkerStyle(r){
-  const temp=Number(r.temperature);
-  if(Number.isFinite(temp)&&temp>=30)return {radius:8,fillColor:"#fb7185",color:"#fecdd3"};
-  if(Number.isFinite(temp)&&temp>=26)return {radius:8,fillColor:"#fbbf24",color:"#fde68a"};
-  return {radius:8,fillColor:"#38bdf8",color:"#bae6fd"};
+  const riding=r?.riding||ridingCondition(r);
+  const level=riding?.level||"normal";
+  const styles={
+    good:{fillColor:"#22c55e",color:"#bbf7d0"},
+    normal:{fillColor:"#facc15",color:"#fef08a"},
+    caution:{fillColor:"#f97316",color:"#fed7aa"},
+    high:{fillColor:"#ef4444",color:"#fecaca"}
+  };
+  const style=styles[level]||styles.normal;
+  return {radius:8,...style};
 }
 
 function cartoKeyUrl(url,key){
