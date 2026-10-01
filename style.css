@@ -447,3 +447,24 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 }
 
 
+
+/* Route motorcycle animation */
+.route-motorcycle-marker{
+  background:transparent;
+  border:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+}
+.route-motorcycle-marker span{
+  display:block;
+  font-size:27px;
+  line-height:1;
+  transform-origin:50% 50%;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.42));
+  transition:transform .08s linear;
+}
+@media(prefers-reduced-motion:reduce){
+  .route-motorcycle-marker span{transition:none}
+}
