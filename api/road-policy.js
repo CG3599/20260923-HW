@@ -264,11 +264,17 @@ export default async function handler(req,res){
       return relevantForRef.length===0;
     });
 
+    const verification=unavailable.length
+      ? "unavailable"
+      : findings.length
+        ? "forbidden-verified"
+        : (missingMileage ? "mileage-pending" : "verified");
+
     return res.status(200).json({
       ok:true,
-      verified:findings.length===0&&missingMileage===0,
+      verified:verification==="verified",
       forbidden:findings.length>0,
-      verification:findings.length?"forbidden-verified":(missingMileage?"mileage-pending":"verified"),
+      verification,
       refs,
       findings,
       unavailable,
