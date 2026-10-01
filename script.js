@@ -1,6 +1,7 @@
 const API_URL="/api/weather";
-const state={rows:[],selectedCity:"",selectedTown:"",selectedDate:"",forecastDates:[],defaultCities:[],suggestionItems:[],suggestionIndex:-1};
-const DEFAULT_KEY="weatherDefaultCities";
+const state={rows:[],selectedCity:"",selectedTown:"",selectedDate:"",forecastDates:[],defaultLocations:[],suggestionItems:[],suggestionIndex:-1};
+const DEFAULT_KEY="weatherDefaultLocations";
+const LEGACY_DEFAULT_KEY="weatherDefaultCities";
 const $=s=>document.querySelector(s);
 
 function icon(t=""){if(t.includes("雷"))return"⛈️";if(t.includes("雨"))return"🌧️";if(t.includes("雪"))return"❄️";if(t.includes("霧"))return"🌫️";if(t.includes("晴時多雲"))return"🌤️";if(t.includes("晴"))return"☀️";if(t.includes("多雲"))return"⛅";if(t.includes("陰"))return"☁️";return"🌈"}
@@ -531,16 +532,48 @@ async function analyzeRoute(){
   }
 }
 
-function loadDefaults(){
-  try{const saved=JSON.parse(localStorage.getItem(DEFAULT_KEY)||"[]");if(Array.isArray(saved)&&saved.length)state.defaultCities=saved.slice(0,9)}catch(_){}
+function normalizeDefaultLocation(value){
+  if(typeof value==="string"){
+    const r=cityRepresentative(value);
+    return r?{city:r.city,town:r.town}:null;
+  }
+  if(!value||!value.city)return null;
+  const city=state.rows.find(r=>r.city===value.city);
+  if(!city)return null;
+  const town=value.town||city.town;
+  const r=state.rows.find(row=>row.city===value.city&&row.town===town);
+  return r?{city:r.city,town:r.town}:null;
 }
-function saveDefaults(){localStorage.setItem(DEFAULT_KEY,JSON.stringify(state.defaultCities.slice(0,9)));updateDefaultCount()}
-function updateDefaultCount(){$("#defaultCount").textContent=state.defaultCities.length+" / 9"}
+function loadDefaults(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(DEFAULT_KEY)||"[]");
+    if(Array.isArray(saved)&&saved.length){
+      state.defaultLocations=saved.map(normalizeDefaultLocation).filter(Boolean).slice(0,9);
+      return;
+    }
+    const legacy=JSON.parse(localStorage.getItem(LEGACY_DEFAULT_KEY)||"[]");
+    if(Array.isArray(legacy)&&legacy.length){
+      state.defaultLocations=legacy.map(normalizeDefaultLocation).filter(Boolean).slice(0,9);
+      saveDefaults();
+    }
+  }catch(_){}
+}
+function saveDefaults(){
+  localStorage.setItem(DEFAULT_KEY,JSON.stringify(state.defaultLocations.slice(0,9)));
+  updateDefaultCount();
+}
+function updateDefaultCount(){
+  $("#defaultCount").textContent=state.defaultLocations.length+" / 9";
+}
 function ensureDefaults(){
-  const available=cities();
-  state.defaultCities=state.defaultCities.filter(c=>available.includes(c));
-  if(!state.defaultCities.length)state.defaultCities=available.slice(0,9);
-  state.defaultCities=state.defaultCities.slice(0,9);
+  const normalized=state.defaultLocations.map(normalizeDefaultLocation).filter(Boolean);
+  state.defaultLocations=normalized.slice(0,9);
+  if(!state.defaultLocations.length){
+    state.defaultLocations=cities().slice(0,9).map(city=>{
+      const r=cityRepresentative(city);
+      return r?{city:r.city,town:r.town}:null;
+    }).filter(Boolean);
+  }
   saveDefaults();
 }
 function normalizeSearchText(value=""){
@@ -766,20 +799,32 @@ function renderRows(rows,showAll=false){
     n.querySelector(".forecast-time").textContent=r.start?"預報時間："+new Date(r.start).toLocaleString("zh-TW",{hour12:false}):"預報時間：--";
     renderThreeDayForecast(n.querySelector(".three-day-forecast"),r);
     bindForecastCollapse(n.querySelector(".three-day-collapse"));
-    check.checked=state.defaultCities.includes(r.city);
-    check.addEventListener("change",()=>toggleDefault(r.city,check.checked));
+    const defaultLocation=state.defaultLocations.some(d=>d.city===r.city&&d.town===r.town);
+    check.checked=defaultLocation;
+    check.addEventListener("change",()=>toggleDefault(r.city,r.town,check.checked));
     g.appendChild(n);
   });
 }
-function toggleDefault(city,on){
-  if(on){if(state.defaultCities.includes(city))return;if(state.defaultCities.length>=9){alert("預設顯示最多 9 個縣市，請先取消其他縣市。");renderDefaultCards();return}state.defaultCities.push(city)}
-  else state.defaultCities=state.defaultCities.filter(c=>c!==city);
-  saveDefaults();renderDefaultCards();
+function toggleDefault(city,town,on){
+  const key=city+"||"+town;
+  if(on){
+    if(state.defaultLocations.some(d=>d.city+"||"+d.town===key))return;
+    if(state.defaultLocations.length>=9){
+      alert("預設顯示最多 9 個地區，請先取消其他預設地區。");
+      renderDefaultCards();
+      return;
+    }
+    state.defaultLocations.push({city,town});
+  }else{
+    state.defaultLocations=state.defaultLocations.filter(d=>d.city!==city||d.town!==town);
+  }
+  saveDefaults();
+  renderDefaultCards();
 }
 function renderDefaultCards(){
-  const rows=selectedRows(state.defaultCities.map(city=>cityRepresentative(city)).filter(Boolean));
+  const rows=selectedRows(state.defaultLocations.map(d=>state.rows.find(r=>r.city===d.city&&r.town===d.town)).filter(Boolean));
   renderRows(rows,true);
-  $("#searchHint").textContent="勾選「預設」即可讓該縣市在下次開啟網頁時自動出現；最多 9 個。";
+  $("#searchHint").textContent="勾選「預設」即可讓該縣市／鄉鎮在下次開啟網頁時自動出現；最多 9 個。";
 }
 function clearSearch(){
   state.selectedCity="";state.suggestionItems=[];state.suggestionIndex=-1;state.selectedTown="";$("#searchInput").value="";$("#townSelect").innerHTML='<option value="">請先選擇縣市</option>';$("#townSelectWrap").classList.add("hidden");$("#suggestions").classList.add("hidden");renderDefaultCards();
