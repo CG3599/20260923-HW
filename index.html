@@ -17,9 +17,6 @@
   <div class="actions"><div id="refreshBtn" class="refresh-control" role="group" aria-label="氣象資料更新狀態與操作"><span id="refreshStatus" class="refresh-status">取得資料中......</span><button id="refreshAction" class="refresh-action" type="button">重新取得資料</button></div></div>
 </header>
 <main>
-
-
-
 <details class="score-explanation">
     <summary>📊 分數說明</summary>
     <div class="score-explanation-body">
@@ -33,7 +30,6 @@
       <div class="score-levels"><span>🟢 4–5 良好</span><span>🟡 3 普通</span><span>🟠 2 需注意</span><span>🔴 0–1 高風險</span></div>
     </div>
   </details>
-
 <section class="search-panel">
   <div class="section-head">
     <div><div class="eyebrow">SEARCH WEATHER</div><h2>搜尋縣市／鄉鎮</h2></div>
@@ -54,10 +50,6 @@
   </div>
   <p id="searchHint" class="search-hint">輸入縣市或鄉鎮名稱後，會自動提供可選項目。</p>
 </section>
-
-
-
-
 <details class="default-cities-collapse">
   <summary>
     <span><span class="eyebrow">DEFAULT CITIES</span><strong>預設顯示縣市</strong></span>
@@ -65,9 +57,6 @@
   </summary>
   <div id="weatherGrid" class="weather-grid"></div>
 </details>
-
-
-
 <section class="route-panel">
   <div class="section-head route-section-head">
     <div><div class="eyebrow">RIDE ROUTE ANALYSIS</div><h2>路線騎乘可行性</h2></div>
@@ -100,7 +89,6 @@
   <div id="routeResult" class="route-result hidden"></div>
   <p class="route-hint">系統會依起點、終點規劃道路路線，並將沿線鄉鎮的天氣條件納入分析。</p>
 </section>
-
 <section class="map-panel">
   <div class="section-head map-head">
     <div><div class="eyebrow">TAIWAN WEATHER MAP</div><h2>台灣氣象地圖</h2></div>
@@ -109,7 +97,6 @@
   <div id="taiwanMap" class="taiwan-map" aria-label="台灣氣象 GIS 地圖"></div>
   <p class="map-hint">點擊地圖上的鄉鎮標記，可查看溫度、濕度、降雨機率、風向與風速。</p>
 </section>
-
 <section class="status-card"><div><strong id="statusTitle">尚未取得氣象資料</strong><p id="statusText">正在連線至中央氣象署取得資料。</p></div><div class="updated"><span>最後更新</span><strong id="updatedAt">--</strong></div></section>
 <section class="summary-grid">
 <div class="summary-card"><span>縣市</span><strong id="cityCount">--</strong></div>
@@ -117,10 +104,8 @@
 <div class="summary-card"><span>平均濕度</span><strong id="avgHumidity">--</strong></div>
 <div class="summary-card"><span>鄉鎮資料筆數</span><strong id="recordCount">--</strong></div>
 </section>
-
 <section class="source-card"><h2>資料說明</h2><p>本頁採用中央氣象署「鄉鎮天氣預報－全臺灣各鄉鎮市區預報資料」API，讀取溫度、相對濕度、降雨機率、風向與風速等欄位。</p><p class="muted">API 授權碼由 Vercel Environment Variables 安全管理，不會儲存在瀏覽器或 GitHub。預設縣市設定會保存在本機瀏覽器。</p></section>
 </main>
-
 <template id="weatherTemplate">
 <article class="weather-card">
   <div class="card-top">
@@ -146,7 +131,6 @@
     <div class="decision-head"><span>🧭 騎乘決策</span><strong class="decision-action"></strong></div>
     <div class="decision-evidence"><span></span></div>
   </div>
-  
   <details class="three-day-collapse">
     <summary><span>📅 未來 7 天天氣</span><span class="forecast-expand-hint">展開查看趨勢</span></summary><p class="forecast-disclaimer">⚠️ 騎乘條件為依目前可取得資料的估算；預測日期距現在越遠，誤差可能越大，第 4–7 天請以趨勢參考為主，出發前再次確認最新預報。</p>
     <div class="three-day-content"><div class="three-day-forecast"></div></div>
@@ -154,11 +138,11 @@
   <div class="forecast-time"></div>
 </article>
 </template>
-
 <footer><span>2026 AIoT-DA HW1</span><a href="https://opendata.cwa.gov.tw/" target="_blank" rel="noopener noreferrer">中央氣象署開放資料平台 ↗</a></footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="carto-config.js"></script>
-  <script src="script.js"></script>
+<script src="script.js"></script>
 <script src="route-points.js"></script>
 <script src="map-performance.js"></script>
+<script src="map-progressive.js"></script>
 </body></html>
