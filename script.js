@@ -425,6 +425,25 @@ function handleRouteSearchKeydown(side,event){
   }
 }
 
+function routeStepText(step){
+  return [step?.ref,step?.name,step?.destinations,step?.exits].filter(Boolean).join(" ");
+}
+function routeHasForbiddenNationalMain(route){
+  const steps=(route?.legs||[]).flatMap(leg=>leg?.steps||[]);
+  return steps.some(step=>{
+    const text=routeStepText(step).replaceAll("臺","台");
+    if(/國道/.test(text)&&/甲/.test(text))return false;
+    if(/國道\s*(1|2|3|4|5|6|7|8|10)\s*(號|線)?/.test(text))return true;
+    const ref=String(step?.ref||"").trim();
+    return /^(1|2|3|4|5|6|7|8|10)(甲)?$/.test(ref) && !/甲/.test(ref) && (step?.road_classification?.motorway_class===true);
+  });
+}
+function routePolicyLabel(route){
+  const nationalBlocked=routeHasForbiddenNationalMain(route);
+  return nationalBlocked
+    ? "⚠️ 路線仍包含國道主線"
+    : "🚫 已啟用：避開國道主線（國道甲線保留）";
+}
 function haversineKm(a,b){
   const R=6371;
   const p1=a[0]*Math.PI/180,p2=b[0]*Math.PI/180;
@@ -464,27 +483,34 @@ async function analyzeRoute(){
   if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return}
   if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return}
   const button=$("#analyzeRouteBtn");
-  button.disabled=true;button.textContent="正在規劃道路並分析沿線天氣…";
+  button.disabled=true;button.textContent="正在規劃道路並檢查道路限制…";
   try{
+    const base="https://router.project-osrm.org/route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude;
     const routeUrls=[
-      "https://router.project-osrm.org/route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude+"?overview=full&geometries=geojson&steps=false",
-      "https://routing.openstreetmap.de/routed-car/route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude+"?overview=full&geometries=geojson&steps=false"
+      base+"?overview=full&geometries=geojson&steps=true&alternatives=true",
+      base+"?overview=full&geometries=geojson&steps=true&alternatives=true&exclude=motorway"
     ];
-    let data=null;
-    for(const url of routeUrls){
+    let data=null,selectedRoute=null,policyMode="normal";
+    for(let i=0;i<routeUrls.length;i++){
       try{
         const controller=new AbortController();
         const timer=setTimeout(()=>controller.abort(),12000);
-        const res=await fetch(url,{signal:controller.signal});
+        const res=await fetch(routeUrls[i],{signal:controller.signal});
         const text=await res.text();
         clearTimeout(timer);
         let parsed=null;
         try{parsed=JSON.parse(text)}catch(_){}
-        if(res.ok&&parsed?.code==="Ok"&&parsed?.routes?.length){data=parsed;break}
+        if(!res.ok||parsed?.code!=="Ok"||!parsed?.routes?.length)continue;
+        const routes=parsed.routes;
+        const safe=routes.find(route=>!routeHasForbiddenNationalMain(route));
+        if(safe){
+          data=parsed;selectedRoute=safe;policyMode=i===1?"exclude-motorway":"verified";
+          break;
+        }
       }catch(_){}
     }
-    if(!data)throw new Error("目前無法取得這兩個地點之間的道路路線。請稍後再試。");
-    const route=data.routes[0],coords=route.geometry.coordinates.map(p=>[p[1],p[0]]);
+    if(!selectedRoute)throw new Error("目前找不到避開國道主線的可行道路路線。國道甲線可行，但若唯一替代路線無法取得，請稍後再試。");
+    const route=selectedRoute,coords=route.geometry.coordinates.map(p=>[p[1],p[0]]);
     const samples=sampleRoutePoints(coords,30);
     const nearby=[];
     const seen=new Set();
@@ -497,7 +523,6 @@ async function analyzeRoute(){
     const conditions=nearby.map(x=>x.row.riding||ridingCondition(x.row)).filter(c=>Number.isFinite(c.score));
     const routePoints=nearby;
     if(!conditions.length)throw new Error("沿線沒有足夠的氣象資料可供分析。");
-    // 路線採用「最弱點」：分數越低代表風險越高，不能用最高分判斷整條路線。
     const minScore=Math.min(...conditions.map(c=>c.score));
     const avgScore=conditions.reduce((a,c)=>a+c.score,0)/conditions.length;
     const level=routeLevel(minScore),decision=routeDecision(level.level);
@@ -508,12 +533,16 @@ async function analyzeRoute(){
     },nearby[0]);
     const reasons=[...new Set(conditions.flatMap(c=>c.reasons||[]))];
     const distanceKm=route.distance/1000,durationMin=Math.round(route.duration/60);
-    const rainValues=nearby.map(x=>x.row.pop).filter(Number.isFinite);
-    const maxRain=rainValues.length?Math.max(...rainValues):null;
     const worstRain=Number.isFinite(worst.row.pop)?worst.row.pop:null;
+    const policyText=policyMode==="exclude-motorway"
+      ? "🚫 已啟用：避開國道主線（OSRM exclude=motorway）"
+      : "🚫 已啟用：避開國道主線（國道甲線保留）";
+    const policyNote="快速道路原則保留；台65、台74、台76、台78、台82、台88 的官方禁行區段已建立為 RideSky 路線政策資料，後續 GIS 驗證會再逐段套用。";
     box.className="route-result "+routeClass(level.level);
     box.innerHTML=
       '<div class="route-result-head"><div class="route-result-title">'+from.city+"｜"+from.town+" → "+to.city+"｜"+to.town+'</div><strong class="route-result-level">'+level.icon+" "+level.label+'</strong></div>'+
+      '<div class="route-policy-badge">'+policyText+'</div>'+
+      '<div class="route-policy-note">'+policyNote+'</div>'+
       '<div class="route-score-row"><div class="route-score"><strong>'+minScore+'</strong><span>最差 Score</span></div><div class="route-summary">依道路路線沿線 '+nearby.length+' 個氣象資料點分析。<br><strong>建議：'+decision.icon+" "+decision.label+'</strong><br>最需注意路段：'+worst.row.city+"｜"+worst.row.town+'</div></div>'+
       '<div class="route-evidence"><div><span>道路距離</span><strong>'+distanceKm.toFixed(1)+' km</strong></div><div><span>預估車程</span><strong>'+durationMin+' 分鐘</strong></div><div><span>沿線平均 Score</span><strong>'+avgScore.toFixed(1)+'</strong></div></div>'+
       '<div class="route-reasons">主要因素：'+(reasons.length?reasons.join("、"):"目前沒有明顯不利因素")+'<br><span>最需注意路段降雨機率：'+(worstRain==null?"--":worstRain+" %")+'</span></div>'+
