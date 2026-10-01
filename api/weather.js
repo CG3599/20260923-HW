@@ -96,6 +96,7 @@ export default async function handler(req, res) {
         forecastDayCount: validation.forecast_day_count,
         minForecastDate: validation.min_forecast_date,
         maxForecastDate: validation.max_forecast_date,
+        forecastDates: [...selectedDates].sort(),
         validation
       }
     });
