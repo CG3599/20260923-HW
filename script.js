@@ -2,6 +2,11 @@ const API_URL="/api/weather";
 const state={rows:[],selectedCity:"",selectedTown:"",selectedDate:"",forecastDates:[],defaultLocations:[],suggestionItems:[],suggestionIndex:-1};
 const DEFAULT_KEY="weatherDefaultLocations";
 let cartoBasemapKey=(window.__CARTO_CONFIG__&&window.__CARTO_CONFIG__.key)||"";
+function loadCartoBasemapKey(){
+  if(!cartoBasemapKey)throw new Error("CARTO_API_KEY 尚未設定。");
+  return cartoBasemapKey;
+}
+
 const $=s=>document.querySelector(s);
 
 function icon(t=""){if(t.includes("雷"))return"⛈️";if(t.includes("雨"))return"🌧️";if(t.includes("雪"))return"❄️";if(t.includes("霧"))return"🌫️";if(t.includes("晴時多雲"))return"🌤️";if(t.includes("晴"))return"☀️";if(t.includes("多雲"))return"⛅";if(t.includes("陰"))return"☁️";return"🌈"}
