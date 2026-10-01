@@ -298,7 +298,7 @@ function refreshSelectedDateView(){
   }else{
     renderDefaultCards();
   }
-  renderTaiwanMap();
+  lazyLoadTaiwanMap();
 }
 function cities(){return [...new Set(state.rows.map(r=>r.city))]}
 function towns(city){return state.rows.filter(r=>r.city===city).sort((a,b)=>a.town.localeCompare(b.town,"zh-Hant"))}
@@ -967,6 +967,28 @@ async function initTaiwanMap(){
   }).addTo(taiwanMap);
 }
 
+let mapLoadScheduled=false;
+function lazyLoadTaiwanMap(){
+  if(mapLoadScheduled||taiwanMap)return;
+  mapLoadScheduled=true;
+  const target=document.getElementById("taiwanMap");
+  if(!target){
+    mapLoadScheduled=false;
+    return;
+  }
+  if("IntersectionObserver" in window){
+    const observer=new IntersectionObserver(entries=>{
+      if(entries.some(entry=>entry.isIntersecting)){
+        observer.disconnect();
+        renderTaiwanMap();
+      }
+    },{rootMargin:"600px 0px"});
+    observer.observe(target);
+  }else{
+    setTimeout(()=>renderTaiwanMap(),300);
+  }
+}
+
 async function renderTaiwanMap(){
   try{
     await initTaiwanMap();
@@ -1028,7 +1050,7 @@ async function loadWeather(){
     populateForecastDateSelect();
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
     loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();
-    renderTaiwanMap();
+    lazyLoadTaiwanMap();
     $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
     statusEl.textContent="取得成功 ✓";
