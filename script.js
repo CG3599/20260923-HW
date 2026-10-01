@@ -1,21 +1,7 @@
 const API_URL="/api/weather";
 const state={rows:[],selectedCity:"",selectedTown:"",selectedDate:"",forecastDates:[],defaultLocations:[],suggestionItems:[],suggestionIndex:-1};
 const DEFAULT_KEY="weatherDefaultLocations";
-let cartoBasemapKey="";
-let cartoBasemapPromise=null;
-async function loadCartoBasemapKey(){
-  if(cartoBasemapKey)return cartoBasemapKey;
-  if(cartoBasemapPromise)return cartoBasemapPromise;
-  cartoBasemapPromise=fetch("/api/carto-config",{cache:"no-store"})
-    .then(r=>{if(!r.ok)throw new Error("無法取得 CARTO 地圖設定。");return r.json()})
-    .then(data=>{
-      if(!data.key)throw new Error("CARTO_API_KEY 尚未設定。");
-      cartoBasemapKey=data.key;
-      return cartoBasemapKey;
-    });
-  return cartoBasemapPromise;
-}
-const LEGACY_DEFAULT_KEY="weatherDefaultCities";
+let cartoBasemapKey=(window.__CARTO_CONFIG__&&window.__CARTO_CONFIG__.key)||"";
 const $=s=>document.querySelector(s);
 
 function icon(t=""){if(t.includes("雷"))return"⛈️";if(t.includes("雨"))return"🌧️";if(t.includes("雪"))return"❄️";if(t.includes("霧"))return"🌫️";if(t.includes("晴時多雲"))return"🌤️";if(t.includes("晴"))return"☀️";if(t.includes("多雲"))return"⛅";if(t.includes("陰"))return"☁️";return"🌈"}
@@ -860,9 +846,9 @@ function weatherMarkerStyle(r){
   return {radius:8,fillColor:"#38bdf8",color:"#bae6fd"};
 }
 
-async function initTaiwanMap(){
+function initTaiwanMap(){
   if(taiwanMap||typeof L==="undefined")return;
-  const key=await loadCartoBasemapKey();
+  const key=loadCartoBasemapKey();
   taiwanMap=L.map("taiwanMap",{zoomControl:true,preferCanvas:true}).setView([23.7,121.0],7);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key="+encodeURIComponent(key),{
     maxZoom:20,
@@ -871,8 +857,8 @@ async function initTaiwanMap(){
   }).addTo(taiwanMap);
 }
 
-async function renderTaiwanMap(){
-  await initTaiwanMap();
+function renderTaiwanMap(){
+  initTaiwanMap();
   if(!taiwanMap)return;
   weatherMarkers.forEach(m=>m.remove());
   weatherMarkers=[];
