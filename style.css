@@ -359,5 +359,3 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 }
 
 
-/* RideSky 專屬地圖色調：只作用於 CARTO 底圖，不影響天氣標記與路線 */
-.ridesky-basemap{filter:brightness(.82) saturate(1.22) hue-rotate(165deg)}
