@@ -73,9 +73,9 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 .map-panel{margin:0 24px 36px;background:rgba(18,27,49,.92);border:1px solid #293755;box-shadow:0 8px 24px #0002;border-radius:18px;padding:20px}
 .map-panel .section-head{padding:0 0 14px}
 .map-count{color:#7dd3fc;font-size:.82rem;font-weight:800}
-.taiwan-map{height:620px;border:1px solid #293755;border-radius:14px;overflow:hidden;background:#0d1528}
+.taiwan-map{height:620px;border:1px solid #293755;border-radius:14px;overflow:hidden;background:#071522}
 .map-hint{color:#8190ad;font-size:.8rem;margin:10px 0 0}
-.leaflet-container{font-family:Inter,"Noto Sans TC",system-ui,sans-serif;background:#0d1528}
+.leaflet-container{font-family:Inter,"Noto Sans TC",system-ui,sans-serif;background:#071522}
 .leaflet-control-zoom a{background:#111a30!important;color:#dfe7f7!important;border-color:#34415e!important}
 .weather-popup{min-width:190px;color:#17213a}.weather-popup h4{margin:0 0 6px;font-size:1rem}.weather-popup p{margin:3px 0;font-size:.8rem}.weather-popup .weather-temp{font-size:1.45rem;font-weight:800;margin-bottom:7px}.weather-popup .popup-muted{color:#65728b}
 @media(max-width:560px){.map-panel{margin-left:0;margin-right:0;border-radius:0}.taiwan-map{height:480px}}
@@ -358,3 +358,6 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
   .three-day-collapse[open] .three-day-content{max-height:none;transform:none;opacity:1}
 }
 
+
+/* RideSky 專屬地圖色調：只作用於 CARTO 底圖，不影響天氣標記與路線 */
+.ridesky-basemap{filter:brightness(.82) saturate(1.22) hue-rotate(165deg)}
