@@ -15,6 +15,7 @@
 
 window.RIDESKY_ROUTE_POLICY = {
   version: "2026-10-02",
+  verification: "official-mileage-policy; geometry verification pending",
   vehicleScope: "大型重型機車",
   source: {
     agency: "交通部公路局",
@@ -79,6 +80,16 @@ window.RIDESKY_ROUTE_POLICY = {
 };
 
 window.RideSkyRoutePolicy = {
+  normalizeRef(value = "") {
+    return String(value).replaceAll("臺","台").replace(/省道|快速公路/g,"").replace(/線$/,"").trim();
+  },
+  forbiddenExpresswayAtMileage(ref, km) {
+    const normalized = this.normalizeRef(ref);
+    if (!Number.isFinite(Number(km))) return false;
+    return window.RIDESKY_ROUTE_POLICY.provincialExpressways.forbidden.some(seg =>
+      this.normalizeRef(seg.ref) === normalized && Number(km) >= seg.fromKm && Number(km) <= seg.toKm
+    );
+  },
   forbiddenNationalMain(ref = "", name = "") {
     const s = (String(ref) + " " + String(name)).replaceAll("臺", "台");
     if (!/國道|national/i.test(s)) return false;
