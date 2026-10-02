@@ -851,12 +851,12 @@ function renderRouteDiagnostics(errorMessage){
     const provider=d.provider?.replace(/^https?:\/\//,"").replace(/\/$/,"")||"--";
     if(d.kind==="osrm"){
       const routeText=d.routes?.length
-        ? d.routes.map((r,j)=>"候選 "+(j+1)+"：\"+Math.round(r.distance||0)+"m / "+Math.round(r.duration||0)+"s / "+(r.road?.hasExpressway?"快速道路":"一般道路")+(r.road?.hasNational?" / 含國道":" / 無國道")).join("； ")
+        ? d.routes.map((r,j)=>"候選 "+(j+1)+"："+Math.round(r.distance||0)+"m / "+Math.round(r.duration||0)+"s / "+(r.road?.hasExpressway?"快速道路":"一般道路")+(r.road?.hasNational?" / 含國道":" / 無國道")).join("； ")
         : "沒有可用 route";
       return "<details class=\"route-debug-item\""+(i===0?" open":"")+"><summary>"+d.context+" · "+provider+" · segment "+(d.segment??"--")+" · HTTP "+(d.status??"--")+" · "+(d.code||"no route")+"</summary><div class=\"route-debug-body\">"+routeText+(d.error?"<br>錯誤："+d.error:"")+"</div></details>";
     }
     if(d.kind==="snap"){
-      const chosen=d.chosen?((d.chosen.ref||"--")+" "+(d.chosen.name||"")+" @ "+(d.chosen.location||[]).join(", ")):"❌ 沒有可用非國道道路";
+      const chosen=d.chosen?((d.chosen.ref||"--")+" "+d.chosen.name+" @ "+(d.chosen.location||[]).join(", ")):"❌ 沒有可用非國道道路";
       return "<details class=\"route-debug-item\"><summary>snap · "+d.context+" · segment "+(d.segment??"--")+"</summary><div class=\"route-debug-body\">輸入："+d.input.latitude.toFixed(5)+", "+d.input.longitude.toFixed(5)+"<br>候選："+d.candidateCount+"；非國道："+d.usableCount+"<br>選擇："+chosen+"</div></details>";
     }
     return "";
@@ -930,8 +930,7 @@ async function analyzeRoute(){
     activateRouteCandidate(0);
   }catch(e){
     console.error(e);
-    box.className="route-result";
-    box.innerHTML="<strong>路線分析失敗</strong><p class=\"route-hint\">"+e.message+"</p>";
+    renderRouteDiagnostics(e.message);
   }finally{
     button.disabled=false;button.textContent="分析這段路的可騎行性";
   }
