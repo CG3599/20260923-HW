@@ -523,24 +523,11 @@ function routeHasForbiddenNationalMain(route){
     return false;
   });
 }
-function routeHasExpressway(route){
-  const steps=(route?.legs||[]).flatMap(leg=>leg?.steps||[]);
-  const expresswayPattern=/(?:台|臺)\s*(61|62|64|65|66|68|72|74|76|78|82|84|86|88)\s*(?:線)?/;
-  return steps.some(step=>{
-    const text=routeStepText(step).replaceAll("臺","台");
-    if(step?.road_classification?.trunk_class===true)return true;
-    if(expresswayPattern.test(text))return true;
-    const ref=String(step?.ref||"").replaceAll("臺","台").trim();
-    return /^(?:台|臺)?\s*(61|62|64|65|66|68|72|74|76|78|82|84|86|88)\s*(?:線)?$/.test(ref);
-  });
-}
-function routeRoadTier(route){
-  if(routeHasForbiddenNationalMain(route))return 0;
-  return routeHasExpressway(route)?2:1;
-}
 function routePolicyLabel(route){
-  const tier=routeRoadTier(route);
-  return tier===0?"⚠️ 路線仍包含國道主線":tier===2?"🚫 國道禁止・快速道路優先":"🚫 國道禁止・一般平面道路";
+  const nationalBlocked=routeHasForbiddenNationalMain(route);
+  return nationalBlocked
+    ? "⚠️ 路線仍包含國道主線"
+    : "🚫 已啟用：避開國道主線（國道甲線保留）";
 }
 function haversineKm(a,b){
   const R=6371;
@@ -560,7 +547,10 @@ function sampleRoutePoints(coords,count=30){
   if(!coords.length)return [];
   const n=Math.min(count,coords.length),out=[];
   if(n===1)return [coords[0]];
-  for(let i=0;i<n;i++)out.push(coords[Math.round(i*(coords.length-1)/(n-1))]);
+  for(let i=0;i<n;i++){
+    const index=Math.round(i*(coords.length-1)/(n-1));
+    out.push(coords[index]);
+  }
   return out;
 }
 function nearestWeatherRow(lat,lon){
@@ -573,34 +563,21 @@ function nearestWeatherRow(lat,lon){
   return best?{row:best,distance:bestDistance}:null;
 }
 function routeClass(level){return level==="high"?"route-high":level==="caution"?"route-caution":level==="normal"?"route-normal":"route-good"}
+
 function routeCandidateAnalysis(route){
   const coords=(route?.geometry?.coordinates||[]).map(p=>[p[1],p[0]]);
   const nearby=[];const seen=new Set();
-  for(const p of sampleRoutePoints(coords,30)){
-    const hit=nearestWeatherRow(p[0],p[1]);
-    if(hit){
-      const weatherRow=routeWeatherRow(hit.row);
-      const key=weatherRow.city+"||"+weatherRow.town;
-      if(!seen.has(key)){seen.add(key);nearby.push({...hit,row:weatherRow});}
-    }
-  }
+  for(const p of sampleRoutePoints(coords,30)){const hit=nearestWeatherRow(p[0],p[1]);if(hit){const weatherRow=routeWeatherRow(hit.row);if(!seen.has(weatherRow.city+"||"+weatherRow.town)){seen.add(weatherRow.city+"||"+weatherRow.town);nearby.push({...hit,row:weatherRow});}}}
   const conditions=nearby.map(x=>x.row.riding||ridingCondition(x.row)).filter(c=>Number.isFinite(c.score));
   const rainLevels=nearby.map(x=>(x.row.riding||ridingCondition(x.row)).rainPenalty||0);
   const pops=nearby.map(x=>x.row.pop).filter(Number.isFinite);
-  return {
-    route,coords,nearby,conditions,
-    roadTier:routeRoadTier(route),
-    rainMetric:rainLevels.length?rainLevels.reduce((a,b)=>a+b,0)/rainLevels.length:0,
-    maxPop:pops.length?Math.max(...pops):null,
-    minScore:conditions.length?Math.min(...conditions.map(c=>c.score)):null,
-    avgScore:conditions.length?conditions.reduce((a,c)=>a+c.score,0)/conditions.length:null
-  };
+  return {route,coords,nearby,conditions,rainMetric:rainLevels.length?rainLevels.reduce((a,b)=>a+b,0)/rainLevels.length:0,maxPop:pops.length?Math.max(...pops):null,minScore:conditions.length?Math.min(...conditions.map(c=>c.score)):null,avgScore:conditions.length?conditions.reduce((a,c)=>a+c.score,0)/conditions.length:null};
 }
 function loadRouteHistory(){try{const x=JSON.parse(localStorage.getItem(ROUTE_HISTORY_KEY)||"[]");return Array.isArray(x)?x.slice(0,10):[];}catch(_){return [];}}
 function renderRouteHistory(){
   const box=$("#routeHistoryList");if(!box)return;const history=loadRouteHistory();
   if(!history.length){box.innerHTML='<div class="route-history-empty">尚無歷史路線查詢。</div>';return;}
-  box.innerHTML=history.map((h,i)=>{const f=h.from||{},t=h.to||{},d=h.time?new Date(h.time):null;const tm=d&&!Number.isNaN(d.getTime())?formatTaiwanDateTime(d):"--";return '<button type="button" class="route-history-item" data-history-index="'+i+'"><div><div class="route-history-route">'+(f.city||"--")+"｜"+(f.town||"--")+" → "+(t.city||"--")+"｜"+(t.town||"--")+'</div><span class="route-history-time">'+tm+'</span></div><span class="route-history-arrow">›</span></button>';}).join("");
+  box.innerHTML=history.map((h,i)=>{const f=h.from||{},t=h.to||{},d=h.time?new Date(h.time):null;const tm=d&&!Number.isNaN(d.getTime())?formatTaiwanDateTime(d):"--";const dateLabel=h.date?formatForecastDate(h.date):"當日";return '<button type="button" class="route-history-item" data-history-index="'+i+'"><div><div class="route-history-route">'+(f.city||"--")+"｜"+(f.town||"--")+" → "+(t.city||"--")+"｜"+(t.town||"--")+'</div><span class="route-history-time">'+tm+'</span></div><span class="route-history-arrow">›</span></button>';}).join("");
   box.querySelectorAll(".route-history-item").forEach(btn=>btn.addEventListener("click",()=>{const h=history[Number(btn.dataset.historyIndex)];if(!h)return;if(h.date){state.routeDate=h.date;const ds=$("#routeDateSelect");if(ds)ds.value=h.date;}const f=findRouteRow((h.from?.city||"")+"||"+(h.from?.town||"")),t=findRouteRow((h.to?.city||"")+"||"+(h.to?.town||""));if(f)setRouteLocation("from",f);if(t)setRouteLocation("to",t);}));
 }
 function saveRouteHistoryItem(from,to){
@@ -610,44 +587,52 @@ function saveRouteHistoryItem(from,to){
   try{localStorage.setItem(ROUTE_HISTORY_KEY,JSON.stringify(history.slice(0,10)));}catch(_){}
   renderRouteHistory();
 }
-let routeDiagnostics=[];
-function resetRouteDiagnostics(){
-  routeDiagnostics=[];
+function routeEndpointPopupHTML(r,icon,label){
+  const c=r.riding||ridingCondition(r);
+  const levelClass=c.level||"normal";
+  const reasons=(c.reasons&&c.reasons.length)?c.reasons.join("、"):"目前沒有明顯不利因素";
+  const score=Number.isFinite(c.score)?c.score:"--";
+  return '<div class="route-endpoint-popup weather-card '+levelClass+'">'+
+    '<div class="card-top"><div><h3 class="city">'+r.city+'</h3><p class="town">'+r.town+'</p></div><div class="card-tools"><span class="weather-icon">'+icon+'</span></div></div>'+
+    '<div class="temperature"><span class="temp">'+fmt(r.temperature)+'</span><small>°C</small></div>'+
+    '<div class="weather-name">'+(r.weather||"資料待更新")+'</div>'+
+    '<details class="weather-details-collapse" open><summary>🌦️ 詳細天氣資訊</summary><div class="details">'+
+      '<div><span>💧 濕度</span><strong>'+fmt(r.humidity," %")+'</strong></div>'+
+      '<div><span>🌧️ 降雨機率</span><strong>'+fmt(r.pop," %")+'</strong></div>'+
+      '<div><span>💨 風向</span><strong>'+(r.windDirection||"--")+'</strong></div>'+
+      '<div><span>💨 風速</span><strong>'+fmt(r.windSpeed," m/s")+'</strong></div>'+
+    '</div></details>'+
+    '<div class="riding-panel riding-'+levelClass+'"><div class="riding-head"><span>🏍️ 騎乘條件</span><strong class="riding-level">'+(c.icon||"🟡")+" "+(c.label||"資料不足")+'</strong></div>'+
+      '<div class="riding-score-row"><div class="score-ring"><strong>'+score+'</strong><span>Score</span></div><div class="riding-meta">'+
+        '<div class="riding-reasons"><span>主要因素</span><strong>'+reasons+'</strong></div>'+
+        '<div class="riding-advice"><span>💡 騎士建議</span><p>'+(c.advice||"--")+'</p></div>'+
+        '<div class="rain-gear-advice"><span>☔ 雨具建議</span><strong class="rain-gear-value">'+(c.rainGear||"--")+'</strong></div>'+
+      '</div></div></div>'+
+    '<div class="forecast-time">預報時間：'+(r.start?formatTaiwanDateTime(r.start):"--")+'</div>'+
+  '</div>';
 }
-function routeDiagnosticEntry(entry){
-  routeDiagnostics.push({
-    time:new Date().toISOString(),
-    ...entry
+function renderRouteEndpoints(from,to){
+  routeEndpointMarkers.forEach(m=>m.remove());routeEndpointMarkers=[];if(!taiwanMap)return;
+  [[from,"📍","起點"],[to,"🏁","終點"]].forEach(([r,ico,label])=>{
+    if(!r||!Number.isFinite(r.latitude)||!Number.isFinite(r.longitude))return;
+    const c=r.riding||ridingCondition(r);
+    const m=L.marker([r.latitude,r.longitude],{icon:L.divIcon({className:"route-endpoint-marker",html:"<span>"+ico+"</span>",iconSize:[36,36],iconAnchor:[18,18]}),zIndexOffset:1200}).addTo(taiwanMap);
+    m.bindPopup(routeEndpointPopupHTML(r,ico,label),{maxWidth:380,minWidth:300,className:"route-weather-popup"});
+    routeEndpointMarkers.push(m);
   });
 }
-function routeDiagnosticRoadType(route){
-  const steps=(route?.legs||[]).flatMap(leg=>leg?.steps||[]);
-  const refs=[...new Set(steps.map(s=>String(s?.ref||"").trim()).filter(Boolean))];
-  const names=[...new Set(steps.map(s=>String(s?.name||"").trim()).filter(Boolean))];
-  const classes=[...new Set(steps.map(s=>s?.road_classification||{}).flatMap(x=>Object.entries(x).filter(([,v])=>v===true).map(([k])=>k)))];
-  return {
-    tier:routeRoadTier(route),
-    hasNational:routeHasForbiddenNationalMain(route),
-    hasExpressway:routeHasExpressway(route),
-    refs:refs.slice(0,12),
-    names:names.slice(0,12),
-    classes
-  };
-}
-function routeDiagnosticRouteSummary(route){
-  return {
-    distance:Number(route?.distance||0),
-    duration:Number(route?.duration||0),
-    road:routeDiagnosticRoadType(route)
-  };
-}
-async function requestOsrmRoutes(base,query,timeoutMs=18000){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
-  try{
-    const res=await fetch(base+query,{signal:controller.signal});
-    const text=await res.text();let data=null;try{data=JSON.parse(text)}catch(_){}
-    return res.ok&&data?.code==="Ok"&&Array.isArray(data.routes)?data.routes:[];
-  }catch(_){return []}finally{clearTimeout(timer);}
+function clearRouteEndpoints(){routeEndpointMarkers.forEach(m=>m.remove());routeEndpointMarkers=[];activeRouteEndpoints=null;}
+function activateRouteCandidate(index){
+  const a=routeCandidates[index];if(!a||!activeRouteEndpoints)return;activeRouteCandidateIndex=index;
+  const from=activeRouteEndpoints.from,to=activeRouteEndpoints.to,route=a.route,box=$("#routeResult"),fast=routeCandidates[0],dry=index===1;
+  const lvl=a.minScore==null?{level:"normal",label:"資料不足",icon:"🟡"}:routeLevel(a.minScore),decision=routeDecision(lvl.level);
+  const worst=a.nearby.filter(x=>Number.isFinite((x.row.riding||ridingCondition(x.row)).score)).reduce((b,x)=>!b||((x.row.riding||ridingCondition(x.row)).score<(b.row.riding||ridingCondition(b.row)).score)?x:b,a.nearby[0]);
+  const reasons=[...new Set(a.conditions.flatMap(c=>c.reasons||[]))],minutes=Math.round(route.duration/60),extra=Math.max(0,minutes-Math.round(fast.route.duration/60));
+  const rainLabel=a.rainMetric>=3?"高":a.rainMetric>=2?"中高":a.rainMetric>=1?"中":"低";
+  box.className="route-result "+routeClass(lvl.level);
+  box.innerHTML='<div class="route-result-head"><div class="route-result-title">'+from.city+"｜"+from.town+" → "+to.city+"｜"+to.town+'</div><strong class="route-result-level">'+lvl.icon+" "+lvl.label+'</strong></div><div class="route-policy-badge">🚫 已啟用：避開高速公路（國道主線全部排除）</div><div class="route-options"><button type="button" class="route-option '+(index===0?"active":"")+'" data-route-index="0"><div class="route-option-title"><strong>最快路線</strong><span>⚡</span></div><div class="route-option-meta"><span>'+Math.round(fast.route.duration/60)+' 分鐘</span><span>'+(fast.route.distance/1000).toFixed(1)+' km</span></div><div class="route-option-note">以避開高速公路後的最短預估時間為優先</div></button>'+(routeCandidates[1]?'<button type="button" class="route-option '+(index===1?"active":"")+'" data-route-index="1"><div class="route-option-title"><strong>低降雨風險路線</strong><span>☔</span></div><div class="route-option-meta"><span>'+Math.round(routeCandidates[1].route.duration/60)+' 分鐘</span><span>'+(routeCandidates[1].route.distance/1000).toFixed(1)+' km</span><span>降雨風險 '+(routeCandidates[1].rainMetric>=3?"高":routeCandidates[1].rainMetric>=2?"中高":routeCandidates[1].rainMetric>=1?"中":"低")+'</span></div><div class="route-option-note">'+(extra<=1?"與最快路線時間幾乎相同":"約多 "+Math.max(0,Math.round(routeCandidates[1].route.duration/60)-Math.round(fast.route.duration/60))+" 分鐘，換取較低降雨風險")+'</div></button>':"")+'</div><div class="route-score-row"><div class="route-score"><strong>'+(a.minScore==null?"--":a.minScore)+'</strong><span>最差 Score</span></div><div class="route-summary">'+(dry?"以較低降雨風險為優先，在可接受時間範圍內選路。":"以最短預估時間為優先。")+"<br>依道路路線沿線 "+a.nearby.length+" 個氣象資料點分析。<br><strong>建議："+decision.icon+" "+decision.label+'</strong><br>最需注意路段：'+(worst?worst.row.city+"｜"+worst.row.town:"--")+'</div></div><div class="route-evidence"><div><span>道路距離</span><strong>'+(route.distance/1000).toFixed(1)+' km</strong></div><div><span>預估車程</span><strong>'+minutes+' 分鐘</strong></div><div><span>沿線平均 Score</span><strong>'+(a.avgScore==null?"--":a.avgScore.toFixed(1))+'</strong></div></div><div class="route-reasons">主要因素：'+(reasons.length?reasons.join("、"):"目前沒有明顯不利因素")+'<br><span>沿線最高降雨機率：'+(a.maxPop==null?"--":a.maxPop+" %")+'</span></div><details class="route-points-collapse"><summary>🛣️ 查看沿線 '+a.nearby.length+' 個氣象資料點</summary><div class="route-points-list">'+a.nearby.map((x,i)=>{const r=x.row,c=r.riding||ridingCondition(r);return '<div class="route-point '+routeClass(c.level)+'"><div class="route-point-index">'+(i+1)+'</div><div><div class="route-point-title"><strong>'+r.city+"｜"+r.town+'</strong><span>'+c.icon+" "+c.label+'</span></div><div class="route-point-metrics"><span class="route-point-score">'+(Number.isFinite(c.score)?"Score "+c.score+" / 5":"資料不足")+'</span><span>🌡️ '+fmt(r.temperature," °C")+'</span><span>💧 '+fmt(r.humidity," %")+'</span><span>🌧️ '+fmt(r.pop," %")+'</span><span>💨 '+fmt(r.windSpeed," m/s")+'</span></div><div class="route-point-weather">'+(r.weather||"天氣資料不足")+" · "+(r.windDirection||"風向未知")+'</div></div></div>';}).join("")+'</div></details>';
+  box.querySelectorAll(".route-option").forEach(b=>b.addEventListener("click",()=>activateRouteCandidate(Number(b.dataset.routeIndex))));
+  if(taiwanMap){if(routeLayer)routeLayer.remove();routeLayer=L.polyline(a.coords,{color:dry?"#60a5fa":"#7dd3fc",weight:5,opacity:.85}).addTo(taiwanMap);taiwanMap.fitBounds(L.latLngBounds(a.coords).pad(.12));renderRouteEndpoints(from,to);startRouteMotorcycleAnimation(a.coords);}
 }
 function buildDetourWaypoints(from,to){
   const a=[from.latitude,from.longitude],b=[to.latitude,to.longitude],candidates=[];
@@ -662,6 +647,14 @@ function buildDetourWaypoints(from,to){
   }
   return candidates;
 }
+async function requestOsrmRoutes(base,query,timeoutMs=18000){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const res=await fetch(base+query,{signal:controller.signal});
+    const text=await res.text();let data=null;try{data=JSON.parse(text)}catch(_){}
+    return res.ok&&data?.code==="Ok"&&Array.isArray(data.routes)?data.routes:[];
+  }catch(_){return []}finally{clearTimeout(timer);}
+}
 async function requestOsrmNearest(base,lat,lon,timeoutMs=10000){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
@@ -669,6 +662,17 @@ async function requestOsrmNearest(base,lat,lon,timeoutMs=10000){
     const data=await res.json().catch(()=>null);
     return res.ok&&data?.code==="Ok"&&data?.waypoints?.[0]?.location?data.waypoints[0].location:null;
   }catch(_){return null}finally{clearTimeout(timer);}
+}
+async function requestRouteFromServers(coords,options=""){
+  const bases=[
+    "https://router.project-osrm.org/",
+    "https://routing.openstreetmap.de/routed-car/"
+  ];
+  for(const root of bases){
+    const routes=await requestOsrmRoutes(root+"route/v1/driving/"+coords,options,18000);
+    if(routes.length)return routes;
+  }
+  return [];
 }
 async function requestSnappedAvoidMotorway(from,waypoints,to){
   const roots=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
@@ -748,263 +752,6 @@ async function requestValhallaFlatRoute(from,to,waypoints=[]){
     }
     return route;
   }catch(_){return null}finally{clearTimeout(timer);}
-}
-async function requestRouteFromServers(coords,options=""){
-  const bases=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
-  for(const root of bases){
-    const routes=await requestOsrmRoutes(root+"route/v1/driving/"+coords,options,22000);
-    if(routes.length)return routes;
-  }
-  return [];
-}
-async function requestOsrmNearestCandidates(base,lat,lon,timeoutMs=10000,diagnostic={}){
-  const started=Date.now();
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
-  try{
-    const res=await fetch(base+"nearest/v1/driving/"+lon+","+lat+"?number=16",{signal:controller.signal});
-    const data=await res.json().catch(()=>null);
-    const waypoints=res.ok&&data?.code==="Ok"&&Array.isArray(data.waypoints)?data.waypoints:[];
-    routeDiagnosticEntry({
-      kind:"nearest",
-      provider:base,
-      context:diagnostic.context||"unknown",
-      segment:diagnostic.segment??null,
-      status:res.status,
-      code:data?.code||null,
-      waypointCount:waypoints.length,
-      waypoints:waypoints.slice(0,16).map(w=>({
-        name:w?.name||"",
-        ref:w?.ref||"",
-        location:w?.location||null,
-        classes:w?.classes||[],
-        distance:Number(w?.distance||0)
-      })),
-      elapsedMs:Date.now()-started
-    });
-    return waypoints;
-  }catch(error){
-    routeDiagnosticEntry({
-      kind:"nearest",
-      provider:base,
-      context:diagnostic.context||"unknown",
-      segment:diagnostic.segment??null,
-      status:null,
-      code:null,
-      waypointCount:0,
-      elapsedMs:Date.now()-started,
-      error:error?.name==="AbortError"?"timeout":String(error?.message||error)
-    });
-    return [];
-  }finally{clearTimeout(timer);}
-}
-function isNationalWaypoint(w){
-  const text=[w?.name,w?.ref,w?.destinations,w?.classes].filter(Boolean).join(" ").replaceAll("臺","台");
-  const classes=Array.isArray(w?.classes)?w.classes.map(x=>String(x).toLowerCase()):[];
-  if(classes.includes("motorway")||classes.includes("motorway_link"))return true;
-  if(w?.road_classification?.motorway_class===true)return true;
-  return /國道\s*(1|2|3|4|5|6|7|8|9|10)\s*(號|線)?/.test(text)||
-    /(?:中山高速公路|福爾摩沙高速公路|北二高|二高|蔣渭水高速公路|北宜高速公路|水沙連高速公路)/.test(text)||
-    /(?:^|\s)(?:國\s*)?(?:1|2|3|4|5|6|7|8|9|10)\s*號?(?:高速公路|國道)(?:\s|$)/.test(text);
-}
-async function snapPointNonNational(root,r,diagnostic={}){
-  const probes=[
-    {latitude:r.latitude,longitude:r.longitude,offset:0},
-    {latitude:r.latitude+0.003,longitude:r.longitude,offset:"+N3"},
-    {latitude:r.latitude-0.003,longitude:r.longitude,offset:"-N3"},
-    {latitude:r.latitude,longitude:r.longitude+0.003,offset:"+E3"},
-    {latitude:r.latitude,longitude:r.longitude-0.003,offset:"-E3"}
-  ];
-  const bases=[root];
-  const alternate=root.includes("router.project-osrm.org")
-    ?"https://routing.openstreetmap.de/routed-car/"
-    :"https://router.project-osrm.org/";
-  if(!bases.includes(alternate))bases.push(alternate);
-
-  for(const probe of probes){
-    const results=await Promise.all(bases.map(base=>requestOsrmNearestCandidates(base,probe.latitude,probe.longitude,7000,{
-      ...diagnostic,
-      context:diagnostic.context||"non-national-snap",
-      probe:probe.offset
-    })));
-    const candidates=results.flat();
-    const usable=candidates
-      .filter(w=>w?.location&&!isNationalWaypoint(w))
-      .sort((a,b)=>Number(a?.distance||Infinity)-Number(b?.distance||Infinity));
-    const chosen=usable[0]||null;
-    routeDiagnosticEntry({
-      kind:"snap",
-      provider:"multi-provider",
-      context:diagnostic.context||"unknown",
-      segment:diagnostic.segment??null,
-      probe:probe.offset,
-      input:{latitude:probe.latitude,longitude:probe.longitude},
-      candidateCount:candidates.length,
-      usableCount:usable.length,
-      chosen:chosen?{
-        name:chosen.name||"",
-        ref:chosen.ref||"",
-        location:chosen.location||null,
-        classes:chosen.classes||[],
-        distance:Number(chosen.distance||0)
-      }:null,
-      rejectedNational:candidates.filter(w=>isNationalWaypoint(w)).slice(0,16).map(w=>({
-        name:w?.name||"",
-        ref:w?.ref||"",
-        classes:w?.classes||[]
-      }))
-    });
-    if(chosen?.location)return chosen.location;
-  }
-  return null;
-}
-function routePointDistanceMeters(a,b){
-  const R=6371000;
-  const lat1=Number(a[1])*Math.PI/180,lat2=Number(b[1])*Math.PI/180;
-  const dLat=(Number(b[1])-Number(a[1]))*Math.PI/180;
-  const dLon=(Number(b[0])-Number(a[0]))*Math.PI/180;
-  const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
-  return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
-}
-function routeGeometryPoints(route){
-  const coords=route?.geometry?.coordinates;
-  if(!Array.isArray(coords)||coords.length<2)return [];
-  return coords.filter(p=>Array.isArray(p)&&p.length>=2&&Number.isFinite(Number(p[0]))&&Number.isFinite(Number(p[1])));
-}
-function sampleRouteCorridor(route,spacingMeters=18000){
-  const points=routeGeometryPoints(route);
-  if(points.length<2)return [];
-  const sampled=[points[0]];
-  let carry=0;
-  for(let i=1;i<points.length;i++){
-    const prev=points[i-1],cur=points[i];
-    const segment=routePointDistanceMeters(prev,cur);
-    if(!Number.isFinite(segment)||segment<=0)continue;
-    carry+=segment;
-    if(carry>=spacingMeters){
-      sampled.push(cur);
-      carry=0;
-    }
-  }
-  const last=points[points.length-1];
-  if(sampled[sampled.length-1]!==last)sampled.push(last);
-  return sampled.map(p=>({latitude:Number(p[1]),longitude:Number(p[0])}));
-}
-async function requestCorridorRoute(from,to,root){
-  const q="?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&annotations=true";
-  const routes=await requestOsrmRoutes(
-    root+"route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude,
-    q,22000,{context:"corridor-route"}
-  );
-  const usable=routes.filter(r=>routeGeometryPoints(r).length>1);
-  return usable.sort((a,b)=>Number(a.duration||Infinity)-Number(b.duration||Infinity))[0]||null;
-}
-async function resolveCorridorAnchors(root,from,to,mode){
-  const corridor=await requestCorridorRoute(from,to,root);
-  if(!corridor)return null;
-  const corridorPoints=sampleRouteCorridor(corridor,mode==="expressway"?50000:45000);
-  if(corridorPoints.length<2)return null;
-
-  const startLocation=await snapPointNonNational(root,from,{
-    context:"corridor-endpoint-start",segment:"start",mode
-  });
-  const endLocation=await snapPointNonNational(root,to,{
-    context:"corridor-endpoint-end",segment:"end",mode
-  });
-  if(!startLocation||!endLocation)return null;
-
-  const anchors=[
-    {location:startLocation,key:startLocation[0].toFixed(5)+","+startLocation[1].toFixed(5),index:0}
-  ];
-
-  for(let i=1;i<corridorPoints.length-1;i++){
-    const point=corridorPoints[i];
-    const key=point.longitude.toFixed(5)+","+point.latitude.toFixed(5);
-    if(anchors.some(anchor=>anchor.key===key))continue;
-    anchors.push({
-      location:[point.longitude,point.latitude],
-      key,
-      index:i
-    });
-  }
-
-  const endKey=endLocation[0].toFixed(5)+","+endLocation[1].toFixed(5);
-  if(!anchors.some(anchor=>anchor.key===endKey)){
-    anchors.push({
-      location:endLocation,
-      key:endKey,
-      index:corridorPoints.length-1
-    });
-  }
-  anchors.sort((a,b)=>a.index-b.index);
-
-  if(anchors.length<2)return null;
-  routeDiagnosticEntry({
-    kind:"corridor",
-    provider:root,
-    context:"corridor-resolved",
-    mode,
-    sourcePointCount:corridorPoints.length,
-    anchorCount:anchors.length,
-    start:anchors[0].location,
-    end:anchors[anchors.length-1].location
-  });
-  return {corridor,anchors};
-}
-async function requestOsrmTierCandidates(coords){
-  const bases=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
-  const queries=[
-    "?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&annotations=true"
-  ];
-  const all=[],seen=new Set();
-  for(const root of bases){
-    for(const q of queries){
-      const routes=await requestOsrmRoutes(root+"route/v1/driving/"+coords,q,22000,{context:"tier-candidate"});
-      for(const route of routes){
-        if(routeHasForbiddenNationalMain(route))continue;
-        const key=(route.geometry?.coordinates||[]).slice(0,5).map(p=>p.join(",")).join("|")+"|"+Math.round(Number(route.distance||0))+"|"+Math.round(Number(route.duration||0));
-        if(!seen.has(key)){seen.add(key);all.push(route);}
-      }
-    }
-  }
-  return all;
-}
-async function requestSegmentedRoute(from,to,mode){
-  // RideSky 路線策略：只走一般平面道路。
-  // 完全不使用國道、快速道路，也不再查詢 Overpass 快速道路網路。
-  if(mode!=="flat")return null;
-  const route=await requestValhallaFlatRoute(from,to,[]);
-  if(!route)return null;
-  return routeHasForbiddenNationalMain(route)?null:route;
-}
-function renderRouteDiagnostics(errorMessage){
-  const box=$("#routeResult");
-  if(!box)return;
-  const rows=routeDiagnostics.map((d,i)=>{
-    const provider=d.provider?.replace(/^https?:\/\//,"").replace(/\/$/,"")||"--";
-    if(d.kind==="osrm"){
-      const routeText=d.routes?.length
-        ?d.routes.map((r,j)=>"候選 "+(j+1)+"："+Math.round(r.distance||0)+"m / "+Math.round(r.duration||0)+"s / "+(r.road?.hasExpressway?"快速道路":"一般道路")+(r.road?.hasNational?" / 含國道":" / 無國道")).join("； ")
-        :"沒有可用 route";
-      return "<details class=\"route-debug-item\""+(i===0?" open":"")+"><summary>"+d.context+" · "+provider+" · segment "+(d.segment??"--")+" · HTTP "+(d.status??"--")+" · "+(d.code||"no route")+"</summary><div class=\"route-debug-body\">"+routeText+(d.error?"<br>錯誤："+d.error:"")+"</div></details>";
-    }
-    if(d.kind==="nearest"){
-      return "";
-    }
-    if(d.kind==="snap"){
-      const input=d.input||{};
-      const chosen=d.chosen?((d.chosen.ref||"--")+" "+d.chosen.name+" @ "+(d.chosen.location||[]).join(", ")):"❌ 沒有可用非國道道路";
-      return "<details class=\"route-debug-item\"><summary>snap · "+d.context+" · "+(d.probe||"0")+" · segment "+(d.segment??"--")+"</summary><div class=\"route-debug-body\">輸入："+Number(input.latitude||0).toFixed(5)+", "+Number(input.longitude||0).toFixed(5)+"<br>候選："+(d.candidateCount||0)+"；非國道："+(d.usableCount||0)+"<br>選擇："+chosen+"</div></details>";
-    }
-    if(d.kind==="segment-failure"){
-      return "<details class=\"route-debug-item\"><summary>segment-failure · "+d.mode+" · segment "+d.segment+"</summary><div class=\"route-debug-body\">"+d.reason+"</div></details>";
-    }
-    if(d.kind==="corridor"){
-      return "<details class=\"route-debug-item\"><summary>corridor · "+d.mode+" · anchors "+d.anchorCount+"</summary><div class=\"route-debug-body\">來源道路點："+d.sourcePointCount+"；起點："+(d.start||[]).join(", ")+"；終點："+(d.end||[]).join(", ")+"</div></details>";
-    }
-    return "";
-  }).join("");
-  box.className="route-result route-debug";
-  box.innerHTML="<strong>路線分析失敗</strong><p class=\"route-hint\">"+String(errorMessage||"未知錯誤")+"</p><div class=\"route-debug-title\">OSRM 實際診斷</div>"+(rows||"<p>尚無 OSRM 診斷資料。</p>");
 }
 async function analyzeRoute(){
   clearRouteMotorcycleAnimation();
