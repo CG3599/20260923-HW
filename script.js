@@ -619,6 +619,27 @@ async function requestOsrmRoutes(base,query,timeoutMs=15000){
   }catch(_){return []}
   finally{clearTimeout(timer);}
 }
+function buildDetourWaypoints(from,to){
+  const a=[from.latitude,from.longitude],b=[to.latitude,to.longitude],candidates=[];
+  const dx=b[1]-a[1],dy=b[0]-a[0],len=Math.hypot(dx,dy)||1;
+  for(const ratio of [.25,.5,.75]){
+    const lat=a[0]+dy*ratio,lon=a[1]+dx*ratio;
+    const nearby=state.rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)&&r.city!==from.city&&r.city!==to.city)
+      .map(r=>({r,d:Math.hypot((r.latitude-lat)*1.1,(r.longitude-lon)*Math.cos(lat*Math.PI/180))}))
+      .sort((x,y)=>x.d-y.d);
+    const pick=nearby[0]?.r;
+    if(pick&&!candidates.some(x=>x.city===pick.city&&x.town===pick.town))candidates.push(pick);
+  }
+  return candidates;
+}
+async function requestOsrmRoutes(base,query,timeoutMs=15000){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const res=await fetch(base+query,{signal:controller.signal});
+    const text=await res.text();let data=null;try{data=JSON.parse(text)}catch(_){}
+    return res.ok&&data?.code==="Ok"&&Array.isArray(data.routes)?data.routes:[];
+  }catch(_){return []}finally{clearTimeout(timer);}
+}
 async function analyzeRoute(){
   clearRouteMotorcycleAnimation();
   const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
@@ -626,46 +647,36 @@ async function analyzeRoute(){
   if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return;}
   const button=$("#analyzeRouteBtn");button.disabled=true;button.textContent="正在規劃路線與沿線天氣…";
   try{
-    const base="https://router.project-osrm.org/route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude;
-    // 第一層：完全避開 motorway／國道主線；允許 trunk 等快速道路。
-    let routes=await requestOsrmRoutes(base,"?overview=full&geometries=geojson&steps=true&alternatives=true&exclude=motorway");
-    let routingMode="快速道路優先";
-    // 第二層：部分 OSRM 節點在 alternatives 上表現不同，再以單一路線請求重試。
-    if(!routes.length)routes=await requestOsrmRoutes(base,"?overview=full&geometries=geojson&steps=true&alternatives=false&continue_straight=false&exclude=motorway");
+    const base="https://router.project-osrm.org/route/v1/driving/";
+    const direct=from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude;
+    let routes=await requestOsrmRoutes(base+direct,"?overview=full&geometries=geojson&steps=true&alternatives=3&exclude=motorway");
     let valid=routes.filter(route=>!routeHasForbiddenNationalMain(route));
-    // 第三層：如果服務端的 exclude 路由器無法產生結果，取得一般道路候選，
-    // 但仍優先選擇不含國道主線的路線；只有最後才允許含 motorway 的路線，
-    // 並在 UI 明確標示「快速道路／高速道路備援」，避免整段路直接失敗。
+    let routingMode="快速道路優先";
+    // 若直接路線無結果，增加平面道路導引點；快速道路（trunk）仍可使用，但 motorway 會被排除。
     if(!valid.length){
-      const general=await requestOsrmRoutes(base,"?overview=full&geometries=geojson&steps=true&alternatives=true&continue_straight=false");
-      const nonNational=general.filter(route=>!routeHasForbiddenNationalMain(route));
-      if(nonNational.length){
-        valid=nonNational;
-        routingMode="平面道路備援";
-      }else if(general.length){
-        valid=[general.slice().sort((a,b)=>a.duration-b.duration)[0]];
-        routingMode="高速道路備援";
+      const waypoints=buildDetourWaypoints(from,to);
+      if(waypoints.length){
+        const coords=[from,...waypoints,...[to]].map(r=>r.longitude+","+r.latitude).join(";");
+        const detour=await requestOsrmRoutes(base+coords,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway");
+        const detourValid=detour.filter(route=>!routeHasForbiddenNationalMain(route));
+        if(detourValid.length){routes=detourValid;valid=detourValid;routingMode="快速道路／平面道路混合";}
       }
     }
-    if(!valid.length)throw new Error("路由服務目前無法建立這兩個地點之間的道路連線，請稍後再試。");
+    // 最後一次：一般道路候選中只接受不含國道主線的路線，不再偷偷使用高速公路。
+    if(!valid.length){
+      const general=await requestOsrmRoutes(base+direct,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false");
+      const nonNational=general.filter(route=>!routeHasForbiddenNationalMain(route));
+      if(nonNational.length){routes=nonNational;valid=nonNational;routingMode="平面道路備援";}
+    }
+    if(!valid.length)throw new Error("目前的路由服務無法建立避開國道的完整道路路線；已嘗試快速道路與平面道路備援。");
     routeCandidates=valid.map(route=>routeCandidateAnalysis(route)).filter(x=>x.coords.length>1).sort((a,b)=>a.route.duration-b.route.duration);
     const fast=routeCandidates[0];if(!fast)throw new Error("目前找不到可用的道路路線。");
     const maxAllowed=fast.route.duration*1.15+600;
     const pool=routeCandidates.filter(x=>x.route.duration<=maxAllowed);
     const dry=pool.slice().sort((a,b)=>a.rainMetric-b.rainMetric||a.route.duration-b.route.duration)[0];
     routeCandidates=[fast];if(dry&&dry!==fast)routeCandidates.push(dry);
-    activeRouteCandidateIndex=0;
-    activeRouteEndpoints={from,to,routingMode};
-    saveRouteHistoryItem(from,to);
-    activateRouteCandidate(0);
-    const modeEl=$("#routeResult");
-    if(modeEl&&routingMode==="高速道路備援"){
-      const badge=modeEl.querySelector(".route-policy-badge");
-      if(badge)badge.textContent="⚠️ 無法建立全程避開高速公路的路線，本次採用道路服務提供的備援路線。";
-    }else if(modeEl&&routingMode==="平面道路備援"){
-      const badge=modeEl.querySelector(".route-policy-badge");
-      if(badge)badge.textContent="🛣️ 已改用平面道路備援；仍優先避開國道主線。";
-    }
+    activeRouteCandidateIndex=0;activeRouteEndpoints={from,to,routingMode};
+    saveRouteHistoryItem(from,to);activateRouteCandidate(0);
   }catch(e){
     console.error(e);box.className="route-result";box.innerHTML="<strong>路線分析失敗</strong><p class=\"route-hint\">"+e.message+"</p>";
   }finally{button.disabled=false;button.textContent="分析這段路的可騎行性";}
