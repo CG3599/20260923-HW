@@ -507,33 +507,24 @@ async function analyzeRoute(){
   if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return}
   if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return}
   const button=$("#analyzeRouteBtn");
-  button.disabled=true;button.textContent="正在規劃避開國道的道路路線…";
+  button.disabled=true;button.textContent="正在規劃避開高速公路的道路路線…";
   try{
     const base="https://router.project-osrm.org/route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude;
-    const routeUrls=[
-      base+"?overview=full&geometries=geojson&steps=true&alternatives=true",
-      base+"?overview=full&geometries=geojson&steps=true&alternatives=true&exclude=motorway"
-    ];
-    let selectedRoute=null,policyMode="normal";
-
-    for(let i=0;i<routeUrls.length&&!selectedRoute;i++){
-      try{
-        const controller=new AbortController();
-        const timer=setTimeout(()=>controller.abort(),12000);
-        const res=await fetch(routeUrls[i],{signal:controller.signal});
-        const text=await res.text();
-        clearTimeout(timer);
-        let parsed=null;
-        try{parsed=JSON.parse(text)}catch(_){}
-        if(!res.ok||parsed?.code!=="Ok"||!parsed?.routes?.length)continue;
-
-        const safe=parsed.routes.find(route=>!routeHasForbiddenNationalMain(route));
-        if(safe){
-          selectedRoute=safe;
-          policyMode=i===1?"exclude-motorway":"verified";
-        }
-      }catch(_){}
-    }
+    // 直接要求 OSRM 排除 motorway，再用道路名稱／國道編號做第二層驗證。
+    const routeUrl=base+"?overview=full&geometries=geojson&steps=true&alternatives=true&exclude=motorway";
+    let selectedRoute=null;
+    try{
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),12000);
+      const res=await fetch(routeUrl,{signal:controller.signal});
+      const text=await res.text();
+      clearTimeout(timer);
+      let parsed=null;
+      try{parsed=JSON.parse(text)}catch(_){}
+      if(res.ok&&parsed?.code==="Ok"&&parsed?.routes?.length){
+        selectedRoute=parsed.routes.find(route=>!routeHasForbiddenNationalMain(route))||null;
+      }
+    }catch(_){}
 
     if(!selectedRoute){
       throw new Error("目前找不到避開國道主線的可行道路路線。請稍後再試，或調整起終點。");
@@ -565,7 +556,7 @@ async function analyzeRoute(){
     const distanceKm=route.distance/1000,durationMin=Math.round(route.duration/60);
     const worstRain=Number.isFinite(worst.row.pop)?worst.row.pop:null;
 
-    const policyText="🚫 已啟用：避開國道主線（國道甲線保留）";
+    const policyText="🚫 已啟用：避開高速公路（國道主線全部排除）";
     box.className="route-result "+routeClass(level.level);
     box.innerHTML=
       '<div class="route-result-head"><div class="route-result-title">'+from.city+"｜"+from.town+" → "+to.city+"｜"+to.town+'</div><strong class="route-result-level">'+level.icon+" "+level.label+'</strong></div>'+
