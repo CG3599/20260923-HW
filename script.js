@@ -641,39 +641,105 @@ function routeDiagnosticRouteSummary(route){
     road:routeDiagnosticRoadType(route)
   };
 }
-async function requestOsrmRoutes(base,query,timeoutMs=18000,diagnostic={}){
-  const started=Date.now();
+async function requestOsrmRoutes(base,query,timeoutMs=18000){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     const res=await fetch(base+query,{signal:controller.signal});
     const text=await res.text();let data=null;try{data=JSON.parse(text)}catch(_){}
-    const routes= res.ok&&data?.code==="Ok"&&Array.isArray(data.routes)?data.routes:[];
-    routeDiagnosticEntry({
-      kind:"osrm",
-      provider:base,
-      context:diagnostic.context||"unknown",
-      segment:diagnostic.segment??null,
-      status:res.status,
-      code:data?.code||null,
-      routeCount:routes.length,
-      elapsedMs:Date.now()-started,
-      routes:routes.slice(0,3).map(routeDiagnosticRouteSummary)
+    return res.ok&&data?.code==="Ok"&&Array.isArray(data.routes)?data.routes:[];
+  }catch(_){return []}finally{clearTimeout(timer);}
+}
+function buildDetourWaypoints(from,to){
+  const a=[from.latitude,from.longitude],b=[to.latitude,to.longitude],candidates=[];
+  const dx=b[1]-a[1],dy=b[0]-a[0];
+  for(const ratio of [.2,.35,.5,.65,.8]){
+    const lat=a[0]+dy*ratio,lon=a[1]+dx*ratio;
+    const nearby=state.rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)&&r.city!==from.city&&r.city!==to.city)
+      .map(r=>({r,d:Math.hypot((r.latitude-lat)*1.1,(r.longitude-lon)*Math.cos(lat*Math.PI/180))}))
+      .sort((x,y)=>x.d-y.d);
+    const pick=nearby[0]?.r;
+    if(pick&&!candidates.some(x=>x.city===pick.city&&x.town===pick.town))candidates.push(pick);
+  }
+  return candidates;
+}
+async function requestSnappedAvoidMotorway(from,waypoints,to){
+  const roots=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
+  const raw=[from,...waypoints,...[to]];
+  for(const root of roots){
+    const snapped=[];
+    let ok=true;
+    for(const r of raw){
+      const p=await requestOsrmNearest(root,r.latitude,r.longitude);
+      if(!p){ok=false;break;}
+      snapped.push(p[0]+","+p[1]);
+    }
+    if(!ok)continue;
+    const query="?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway";
+    const routes=await requestOsrmRoutes(root+"route/v1/driving/"+snapped.join(";"),query,22000);
+    const valid=routes.filter(route=>!routeHasForbiddenNationalMain(route));
+    if(valid.length)return {routes:valid,mode:"快速道路／平面道路混合"};
+  }
+  return {routes:[],mode:""};
+}
+function decodePolyline6(str){
+  let index=0,lat=0,lng=0,out=[];
+  while(index<str.length){
+    let result=0,shift=0,b;
+    do{b=str.charCodeAt(index++)-63;result|=(b&31)<<shift;shift+=5;}while(b>=32);
+    lat+=result&1?~(result>>1):result>>1;
+    result=0;shift=0;
+    do{b=str.charCodeAt(index++)-63;result|=(b&31)<<shift;shift+=5;}while(b>=32);
+    lng+=result&1?~(result>>1):result>>1;
+    out.push([lat/1e6,lng/1e6]);
+  }
+  return out;
+}
+async function requestValhallaFlatRoute(from,to,waypoints=[]){
+  const locations=[from,...waypoints,to].map(r=>({lat:r.latitude,lon:r.longitude,type:"break"}));
+  const payload={
+    locations,
+    costing:"motorcycle",
+    costing_options:{motorcycle:{use_highways:0,use_trails:0}},
+    units:"kilometers",
+    directions_options:{units:"kilometers"}
+  };
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),22000);
+  try{
+    const res=await fetch("https://valhalla1.openstreetmap.de/route",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Client-Id":"ridesky-weather"},
+      body:JSON.stringify(payload),
+      signal:controller.signal
     });
-    return routes;
-  }catch(error){
-    routeDiagnosticEntry({
-      kind:"osrm",
-      provider:base,
-      context:diagnostic.context||"unknown",
-      segment:diagnostic.segment??null,
-      status:null,
-      code:null,
-      routeCount:0,
-      elapsedMs:Date.now()-started,
-      error:error?.name==="AbortError"?"timeout":String(error?.message||error)
-    });
-    return [];
-  }finally{clearTimeout(timer);}
+    const data=await res.json().catch(()=>null);
+    const trip=data?.trip;
+    if(!res.ok||!trip?.legs?.length||!Array.isArray(trip.legs))return null;
+    const coords=[];
+    const steps=[];
+    for(const leg of trip.legs){
+      if(leg.shape){
+        const part=decodePolyline6(leg.shape);
+        if(part.length)coords.push(...(coords.length?part.slice(1):part));
+      }
+      for(const m of leg.maneuvers||[]){
+        const names=(m.street_names||[]).map(x=>x.value||x.text||String(x)).join(" ");
+        const instruction=[m.verbal_pre_transition_instruction,m.verbal_post_transition_instruction].filter(Boolean).join(" ");
+        steps.push({name:names,ref:"",destinations:instruction});
+      }
+    }
+    if(coords.length<2)return null;
+    const summary=trip.summary||{};
+    const route={
+      distance:Number(summary.length||0)*1000,
+      duration:Number(summary.time||0),
+      geometry:{type:"LineString",coordinates:coords.map(p=>[p[1],p[0]])},
+      legs:[{steps}]
+    };
+    if(!route.distance){
+      route.distance=coords.reduce((s,p,i)=>i?s+routeDistance([coords[i-1][0],coords[i-1][1]],[p[0],p[1]]):0,0);
+    }
+    return route;
+  }catch(_){return null}finally{clearTimeout(timer);}
 }
 async function requestRouteFromServers(coords,options=""){
   const bases=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
@@ -933,29 +999,77 @@ function renderRouteDiagnostics(errorMessage){
   box.innerHTML="<strong>路線分析失敗</strong><p class=\"route-hint\">"+String(errorMessage||"未知錯誤")+"</p><div class=\"route-debug-title\">OSRM 實際診斷</div>"+(rows||"<p>尚無 OSRM 診斷資料。</p>");
 }
 async function analyzeRoute(){
-  resetRouteDiagnostics();
   clearRouteMotorcycleAnimation();
   const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
   if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return;}
   if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return;}
-  const button=$("#analyzeRouteBtn");button.disabled=true;button.textContent="正在依道路策略規劃路線…";
+  const button=$("#analyzeRouteBtn");button.disabled=true;button.textContent="正在確認道路連通性與規劃路線…";
   try{
-    const route=await requestSegmentedRoute(from,to,"flat");
-    const routingMode="僅平面道路（排除國道／快速道路）";
-    if(!route)throw new Error("目前找不到符合「僅平面道路（排除國道／快速道路）」規則的完整路線。");
-    if(routeHasForbiddenNationalMain(route))throw new Error("路線驗證失敗：候選路線包含國道，已拒絕顯示。");
-    routeCandidates=[routeCandidateAnalysis(route)].filter(x=>x.coords.length>1);
-    if(!routeCandidates.length)throw new Error("路由服務有回應，但沒有可繪製的完整道路幾何。");
-    activeRouteCandidateIndex=0;
-    activeRouteEndpoints={from,to,routingMode};
-    saveRouteHistoryItem(from,to);
-    activateRouteCandidate(0);
+    const direct=from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude;
+    // 第一階段：先確認「點到點確實存在可行車道路」。這一步不設高速公路限制，只做連通性證明。
+    const connected=await requestRouteFromServers(direct,"?overview=false&geometries=geojson&steps=true&alternatives=1");
+    if(!connected.length)throw new Error("起點與終點目前無法由路由服務建立道路連通；請稍後再試。");
+
+    // 第二階段：直接要求避開 motorway。若服務能直接找到，優先採用。
+    let valid=(await requestRouteFromServers(direct,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway"))
+      .filter(route=>!routeHasForbiddenNationalMain(route));
+    let routingMode="快速道路優先";
+
+    // 第三階段：不要把「鄉鎮中心點」直接當成途經點；先用 nearest API 把導引點吸附到真正可行車道路，再重新規劃。
+    if(!valid.length){
+      const waypoints=buildDetourWaypoints(from,to);
+      const snapped=await requestSnappedAvoidMotorway(from,waypoints,to);
+      if(snapped.routes.length){valid=snapped.routes;routingMode=snapped.mode;}
+    }
+
+    // 第四階段：逐一增加較少的導引點，避免過多 via 點把路線切斷。
+    if(!valid.length){
+      const waypoints=buildDetourWaypoints(from,to);
+      for(const count of [1,2,3]){
+        if(valid.length)break;
+        const selected=waypoints.slice(0,count);
+        const snapped=await requestSnappedAvoidMotorway(from,selected,to);
+        if(snapped.routes.length){valid=snapped.routes;routingMode=snapped.mode;}
+      }
+    }
+
+    // 第五階段：最後保證「平面道路」是獨立的最後備援。
+    // 不再因為 OSRM 的 motorway exclusion graph 沒有回應，就把整條路線判定為不存在。
+    if(!valid.length){
+      const flatCandidates=[];
+      for(const selected of [[],buildDetourWaypoints(from,to).slice(0,1),buildDetourWaypoints(from,to).slice(0,2)]){
+        const route=await requestValhallaFlatRoute(from,to,selected);
+        if(route&&!routeHasForbiddenNationalMain(route))flatCandidates.push(route);
+        if(flatCandidates.length>=3)break;
+      }
+      if(flatCandidates.length){
+        valid=flatCandidates;
+        routingMode="平面道路最後備援";
+      }
+    }
+
+    // 最後的最後才使用一般道路服務，只接受「明確沒有國道主線」的結果。
+    if(!valid.length){
+      const general=(await requestRouteFromServers(direct,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false"))
+        .filter(route=>!routeHasForbiddenNationalMain(route));
+      if(general.length){valid=general;routingMode="平面道路備援";}
+    }
+
+    if(!valid.length)throw new Error("已確認起點與終點之間存在道路，但目前路由服務暫時沒有回傳可驗證的平面道路路線；系統已嘗試快速道路、道路吸附與平面道路備援。");
+
+    routeCandidates=valid.map(route=>routeCandidateAnalysis(route)).filter(x=>x.coords.length>1).sort((a,b)=>a.route.duration-b.route.duration);
+    const fast=routeCandidates[0];if(!fast)throw new Error("路由服務有回應，但沒有可繪製的完整道路幾何。");
+    const maxAllowed=fast.route.duration*1.15+600;
+    const pool=routeCandidates.filter(x=>x.route.duration<=maxAllowed);
+    const dry=pool.slice().sort((a,b)=>a.rainMetric-b.rainMetric||a.route.duration-b.route.duration)[0];
+    routeCandidates=[fast];
+    if(dry&&dry!==fast)routeCandidates.push(dry);
+    // 只有存在實際不同的第二條路線才顯示第二個選項，不虛構路線。
+    activeRouteCandidateIndex=0;activeRouteEndpoints={from,to,routingMode};
+    saveRouteHistoryItem(from,to);activateRouteCandidate(0);
   }catch(e){
-    console.error(e);
-    renderRouteDiagnostics(e.message);
-  }finally{
-    button.disabled=false;button.textContent="分析這段路的可騎行性";
-  }
+    console.error(e);box.className="route-result";box.innerHTML="<strong>路線分析失敗</strong><p class=\"route-hint\">"+e.message+"</p>";
+  }finally{button.disabled=false;button.textContent="分析這段路的可騎行性";}
 }
 function clearRoute(){
   clearRouteMotorcycleAnimation();
