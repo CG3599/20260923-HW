@@ -923,16 +923,40 @@ async function requestSegmentedRoute(from,to,mode){
 }
 function strategyBbox(from,to,pad=0.28){return [Math.min(from.latitude,to.latitude)-pad,Math.max(from.latitude,to.latitude)+pad,Math.min(from.longitude,to.longitude)-pad,Math.max(from.longitude,to.longitude)+pad];}
 async function fetchExpresswayNetwork(from,to){
-  const [south,north,west,east]=strategyBbox(from,to);
-  const query='[out:json][timeout:35];way["highway"~"^(trunk|trunk_link)$"]('+south+','+west+','+north+','+east+');out geom;';
-  for(const endpoint of ["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"]){
-    try{
-      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),40000);
-      const res=await fetch(endpoint+"?data="+encodeURIComponent(query),{signal:controller.signal});
-      clearTimeout(timer);
-      const data=await res.json().catch(()=>null);
-      if(res.ok&&Array.isArray(data?.elements)&&data.elements.length)return data.elements;
-    }catch(_){}
+  // 瀏覽器不直接呼叫 Overpass，避免第三方 API 的 CORS 限制。
+  // 改由同源 Vercel Server API 代理：Browser → /api/route-strategy → Overpass。
+  try{
+    const res=await fetch("/api/route-strategy",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        from:{latitude:from.latitude,longitude:from.longitude},
+        to:{latitude:to.latitude,longitude:to.longitude}
+      })
+    });
+    const data=await res.json().catch(()=>null);
+    routeDiagnosticEntry({
+      kind:"overpass-proxy",
+      context:"expressway-network",
+      provider:data?.proxy||"/api/route-strategy",
+      status:res.status,
+      count:Array.isArray(data?.elements)?data.elements.length:0,
+      source:data?.source||"Overpass",
+      error:data?.error||null
+    });
+    if(res.ok&&data?.ok&&Array.isArray(data.elements)&&data.elements.length){
+      return data.elements;
+    }
+  }catch(error){
+    routeDiagnosticEntry({
+      kind:"overpass-proxy",
+      context:"expressway-network",
+      provider:"/api/route-strategy",
+      status:0,
+      count:0,
+      source:"Overpass",
+      error:String(error?.message||error||"proxy request failed")
+    });
   }
   return [];
 }
