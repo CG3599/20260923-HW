@@ -545,13 +545,3 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 
 .route-endpoint-popup .forecast-time{margin-top:12px}
 @media(max-width:560px){.route-endpoint-popup.weather-card{max-width:300px;padding:15px}.route-weather-popup .leaflet-popup-content{max-width:300px}}
-
-/* Route diagnostics */
-.route-debug{max-height:560px;overflow:auto}
-.route-debug-title{margin-top:14px;padding:9px 11px;border:1px solid rgba(125,211,252,.18);border-radius:10px;background:rgba(15,32,50,.72);color:#9bdcff;font-size:.75rem;font-weight:800;letter-spacing:.04em}
-.route-debug-item{margin-top:7px;border:1px solid rgba(148,163,184,.13);border-radius:9px;background:rgba(10,20,34,.72);overflow:hidden}
-.route-debug-item summary{padding:9px 11px;color:#cbd5e1;font-size:.7rem;font-weight:700;cursor:pointer;list-style:none}
-.route-debug-item summary::-webkit-details-marker{display:none}
-.route-debug-item summary:before{content:"＋";color:#7dd3fc;margin-right:7px}
-.route-debug-item[open] summary:before{content:"−"}
-.route-debug-body{padding:9px 11px 11px;color:#8191ab;font-size:.66rem;line-height:1.65;border-top:1px solid rgba(148,163,184,.09);overflow-wrap:anywhere}
