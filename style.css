@@ -468,7 +468,7 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 .route-history-route{font-size:.76rem;font-weight:800}
 .route-history-time{display:block;color:#71809d;font-size:.62rem;margin-top:3px}
 .route-history-arrow{color:#7dd3fc}
-.route-endpoint-popup{min-width:210px}
+.route-endpoint-marker{background:transparent;border:0;display:flex;align-items:center;justify-content:center;pointer-events:auto}.route-endpoint-marker span{display:block;font-size:25px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}.route-history-empty{padding:16px;color:#71809d;text-align:center;font-size:.76rem}.route-endpoint-popup{min-width:210px}
 .route-endpoint-popup h4{margin:0 0 8px;color:#e5edff}
 .route-endpoint-popup .endpoint-score{padding:8px 10px;border-radius:9px;background:#111b31;margin:8px 0}
 @media(max-width:700px){.route-options{grid-template-columns:1fr}}
