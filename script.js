@@ -1325,9 +1325,8 @@ async function loadWeather(){
     }
     populateForecastDateSelect();
     populateRouteDateSelect();
-    populateRouteDateSelect();
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
-    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();populateRouteDateSelect();populateRouteDateSelect();
+    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();populateRouteDateSelect();
     lazyLoadTaiwanMap();
     $("#updatedAt").textContent=formatTaiwanDateTime(new Date());
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
