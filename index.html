@@ -20,12 +20,12 @@
 <details class="score-explanation">
     <summary>📊 分數說明</summary>
     <div class="score-explanation-body">
-      <p>滿分 5 分，分數越高代表目前可取得資料所推估的騎乘條件越穩定。降雨機率／雨量不納入分數，避免資料缺失時誤判。此評分為網站 Prototype 分析機制，並非官方道路安全標準。</p><p class="muted">⚠️ 未來預測距離現在越遠，不確定性通常越高；因此第 4–7 天的騎乘條件僅供趨勢參考，實際出發前請重新確認最新預報。</p>
+      <p>滿分 5 分，分數越高代表目前氣象條件對一般機車騎乘越友善。評分會綜合降雨風險、風速、氣溫與濕度；天氣現象與降雨機率會共同形成「降雨風險」，避免同一項降雨因素被重複扣分。此評分為網站 Prototype 分析機制，並非官方道路安全標準。</p><p class="muted">☔ 降雨機率除了影響評分，也會獨立產生「雨具建議」：20% 起即可開始提醒騎士考慮攜帶雨具；短暫陣雨、雷雨等天氣現象也會提高降雨風險。⚠️ 未來預測距離現在越遠，不確定性通常越高；第 4–7 天請以趨勢參考為主，實際出發前重新確認最新預報。</p>
       <div class="score-rule-grid">
-        <div><strong>🌧️ 降雨資料</strong><span>不納入騎乘條件分數，僅依目前可取得資料估算</span></div>
-        <div><strong>💨 風速</strong><span>≥7 m/s：扣 1 分</span></div>
-        <div><strong>🌡️ 氣溫</strong><span>≤10°C：扣 1 分　≥35°C：扣 1 分</span></div>
-        <div><strong>💧 濕度</strong><span>≥90%：扣 1 分</span></div>
+        <div><strong>🌧️ 降雨風險</strong><span>20% 起開始影響；50% 約為中高風險，70% 以上明顯提高影響</span></div>
+        <div><strong>☔ 雨具建議</strong><span>20–49% 可考慮／建議攜帶；50% 以上建議攜帶；70% 以上強烈建議</span></div>
+        <div><strong>💨 風速</strong><span>5 m/s 起扣分；7、10、13 m/s 以上逐級增加影響</span></div>
+        <div><strong>🌡️ 氣溫／💧濕度</strong><span>高溫、低溫與高濕度會降低適合度；多項不利因素會進一步限制最高分</span></div>
       </div>
       <div class="score-levels"><span>🟢 4–5 良好</span><span>🟡 3 普通</span><span>🟠 2 需注意</span><span>🔴 0–1 高風險</span></div>
     </div>
@@ -146,7 +146,7 @@
   </details>
   <div class="riding-panel">
     <div class="riding-head"><span>🏍️ 騎乘條件</span><strong class="riding-level"></strong></div>
-    <div class="riding-score-row"><div class="score-ring"><strong class="riding-score-value"></strong><span>Score</span></div><div class="riding-meta"><div class="riding-reasons"><span>主要因素</span><strong class="riding-reasons-value"></strong></div><div class="riding-advice"><span>💡 騎士建議</span><p class="riding-advice-value"></p></div></div></div>
+    <div class="riding-score-row"><div class="score-ring"><strong class="riding-score-value"></strong><span>Score</span></div><div class="riding-meta"><div class="riding-reasons"><span>主要因素</span><strong class="riding-reasons-value"></strong></div><div class="riding-advice"><span>💡 騎士建議</span><p class="riding-advice-value"></p></div><div class="rain-gear-advice"><span>☔ 雨具建議</span><strong class="rain-gear-value"></strong></div></div></div>
   </div>
   <div class="decision-panel">
     <div class="decision-head"><span>🧭 騎乘決策</span><strong class="decision-action"></strong></div>
