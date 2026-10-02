@@ -899,16 +899,27 @@ async function requestSegmentedRoute(from,to,mode){
     const route=await requestValhallaFlatRoute(from,to,[]);
     return route&&!routeHasForbiddenNationalMain(route)?route:null;
   }
+
+  // 快速道路模式：OSM trunk/trunk_link 只負責決定「應走哪條快速道路」，
+  // OSRM 只負責把相鄰策略節點實際連成道路。起終點接入段允許一般道路，
+  // 中間段則必須含快速道路且不得含國道。
   const spine=await buildExpresswaySpine(from,to);
-  if(!spine||spine.length<2)return null;
-  const points=spine.map(p=>({latitude:p[1],longitude:p[0]})),segments=[];
+  if(!spine||spine.length<4)return null;
+
+  const points=spine.map(p=>({latitude:p[1],longitude:p[0]}));
+  const segments=[];
   for(let i=0;i<points.length-1;i++){
-    const segment=await requestStrategySegment(points[i],points[i+1],"expressway",i,points.length-1);
+    const access=i===0||i===points.length-2;
+    const segment=await requestStrategySegment(
+      points[i],points[i+1],access?"access":"expressway",i,points.length-1
+    );
     if(!segment)return null;
     segments.push(segment);
   }
+
   const merged=mergeRouteSegments(segments);
-  return merged&&!routeHasForbiddenNationalMain(merged)&&routeHasExpressway(merged)?merged:null;
+  if(!merged||routeHasForbiddenNationalMain(merged)||!routeHasExpressway(merged))return null;
+  return merged;
 }
 function strategyBbox(from,to,pad=0.28){return [Math.min(from.latitude,to.latitude)-pad,Math.max(from.latitude,to.latitude)+pad,Math.min(from.longitude,to.longitude)-pad,Math.max(from.longitude,to.longitude)+pad];}
 async function fetchExpresswayNetwork(from,to){
@@ -999,10 +1010,19 @@ function dedupeRoutePoints(points){
 async function requestStrategySegment(from,to,mode,index,total){
   for(const root of ["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"]){
     const url=root+"route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude;
-    const routes=await requestOsrmRoutes(url,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false",20000,{context:"strategy-segment",segment:index+" / "+total,mode});
+    const routes=await requestOsrmRoutes(
+      url,
+      "?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false",
+      20000,
+      {context:"strategy-segment",segment:index+" / "+total,mode}
+    );
     const valid=routes.filter(r=>!routeHasForbiddenNationalMain(r));
-    const express=valid.filter(routeHasExpressway);
-    if(express.length)return express[0];
+    if(mode==="access"){
+      if(valid.length)return valid[0];
+    }else{
+      const express=valid.filter(routeHasExpressway);
+      if(express.length)return express[0];
+    }
   }
   return null;
 }
