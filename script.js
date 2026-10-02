@@ -779,13 +779,15 @@ async function analyzeRoute(){
         if(segmentedFlat&&!routeHasForbiddenNationalMain(segmentedFlat)){
           candidates=[segmentedFlat];routingMode="國道禁止／一般平面道路分段搜尋";
         }else{
-          const waypoints=buildDetourWaypoints(from,to);
-          const flatFallback=[];
-          for(const selected of [[],waypoints.slice(0,1),waypoints.slice(0,2)]){
-            const route=await requestValhallaFlatRoute(from,to,selected);
-            if(route&&!routeHasForbiddenNationalMain(route))flatFallback.push(route);
+          // 最後才使用 Valhalla 作為獨立的平面道路備援。
+          // 舊版曾呼叫已移除的 buildDetourWaypoints()，會造成
+          // ReferenceError；現在不再依賴不存在的繞行函式，也不再疊加
+          // 無法驗證的人工 detour waypoint。
+          const fallbackRoute=await requestValhallaFlatRoute(from,to,[]);
+          if(fallbackRoute&&!routeHasForbiddenNationalMain(fallbackRoute)){
+            candidates=[fallbackRoute];
+            routingMode="國道禁止／一般平面道路備援";
           }
-          if(flatFallback.length){candidates=flatFallback;routingMode="國道禁止／一般平面道路備援";}
         }
       }
     }
