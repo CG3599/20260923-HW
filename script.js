@@ -634,16 +634,6 @@ function activateRouteCandidate(index){
   box.querySelectorAll(".route-option").forEach(b=>b.addEventListener("click",()=>activateRouteCandidate(Number(b.dataset.routeIndex))));
   if(taiwanMap){if(routeLayer)routeLayer.remove();routeLayer=L.polyline(a.coords,{color:dry?"#60a5fa":"#7dd3fc",weight:5,opacity:.85}).addTo(taiwanMap);taiwanMap.fitBounds(L.latLngBounds(a.coords).pad(.12));renderRouteEndpoints(from,to);startRouteMotorcycleAnimation(a.coords);}
 }
-async function requestOsrmRoutes(base,query,timeoutMs=15000){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
-  try{
-    const res=await fetch(base+query,{signal:controller.signal});
-    const text=await res.text();
-    let data=null;try{data=JSON.parse(text)}catch(_){}
-    return res.ok&&data?.code==="Ok"&&Array.isArray(data.routes)?data.routes:[];
-  }catch(_){return []}
-  finally{clearTimeout(timer);}
-}
 function buildDetourWaypoints(from,to){
   const a=[from.latitude,from.longitude],b=[to.latitude,to.longitude],candidates=[];
   const dx=b[1]-a[1],dy=b[0]-a[0];
@@ -703,6 +693,66 @@ async function requestSnappedAvoidMotorway(from,waypoints,to){
   }
   return {routes:[],mode:""};
 }
+function decodePolyline6(str){
+  let index=0,lat=0,lng=0,out=[];
+  while(index<str.length){
+    let result=0,shift=0,b;
+    do{b=str.charCodeAt(index++)-63;result|=(b&31)<<shift;shift+=5;}while(b>=32);
+    lat+=result&1?~(result>>1):result>>1;
+    result=0;shift=0;
+    do{b=str.charCodeAt(index++)-63;result|=(b&31)<<shift;shift+=5;}while(b>=32);
+    lng+=result&1?~(result>>1):result>>1;
+    out.push([lat/1e6,lng/1e6]);
+  }
+  return out;
+}
+async function requestValhallaFlatRoute(from,to,waypoints=[]){
+  const locations=[from,...waypoints,to].map(r=>({lat:r.latitude,lon:r.longitude,type:"break"}));
+  const payload={
+    locations,
+    costing:"motorcycle",
+    costing_options:{motorcycle:{use_highways:0,use_trails:0}},
+    units:"kilometers",
+    directions_options:{units:"kilometers"}
+  };
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),22000);
+  try{
+    const res=await fetch("https://valhalla1.openstreetmap.de/route",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Client-Id":"ridesky-weather"},
+      body:JSON.stringify(payload),
+      signal:controller.signal
+    });
+    const data=await res.json().catch(()=>null);
+    const trip=data?.trip;
+    if(!res.ok||!trip?.legs?.length||!Array.isArray(trip.legs))return null;
+    const coords=[];
+    const steps=[];
+    for(const leg of trip.legs){
+      if(leg.shape){
+        const part=decodePolyline6(leg.shape);
+        if(part.length)coords.push(...(coords.length?part.slice(1):part));
+      }
+      for(const m of leg.maneuvers||[]){
+        const names=(m.street_names||[]).map(x=>x.value||x.text||String(x)).join(" ");
+        const instruction=[m.verbal_pre_transition_instruction,m.verbal_post_transition_instruction].filter(Boolean).join(" ");
+        steps.push({name:names,ref:"",destinations:instruction});
+      }
+    }
+    if(coords.length<2)return null;
+    const summary=trip.summary||{};
+    const route={
+      distance:Number(summary.length||0)*1000,
+      duration:Number(summary.time||0),
+      geometry:{type:"LineString",coordinates:coords.map(p=>[p[1],p[0]])},
+      legs:[{steps}]
+    };
+    if(!route.distance){
+      route.distance=coords.reduce((s,p,i)=>i?s+routeDistance([coords[i-1][0],coords[i-1][1]],[p[0],p[1]]):0,0);
+    }
+    return route;
+  }catch(_){return null}finally{clearTimeout(timer);}
+}
 async function analyzeRoute(){
   clearRouteMotorcycleAnimation();
   const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
@@ -738,21 +788,38 @@ async function analyzeRoute(){
       }
     }
 
-    // 最後再確認一般道路候選：如果路由服務的 exclude graph 暫時異常，仍只接受經逐段道路檢查後不含國道主線的候選。
+    // 第五階段：最後保證「平面道路」是獨立的最後備援。
+    // 不再因為 OSRM 的 motorway exclusion graph 沒有回應，就把整條路線判定為不存在。
+    if(!valid.length){
+      const flatCandidates=[];
+      for(const selected of [[],buildDetourWaypoints(from,to).slice(0,1),buildDetourWaypoints(from,to).slice(0,2)]){
+        const route=await requestValhallaFlatRoute(from,to,selected);
+        if(route&&!routeHasForbiddenNationalMain(route))flatCandidates.push(route);
+        if(flatCandidates.length>=3)break;
+      }
+      if(flatCandidates.length){
+        valid=flatCandidates;
+        routingMode="平面道路最後備援";
+      }
+    }
+
+    // 最後的最後才使用一般道路服務，只接受「明確沒有國道主線」的結果。
     if(!valid.length){
       const general=(await requestRouteFromServers(direct,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false"))
         .filter(route=>!routeHasForbiddenNationalMain(route));
       if(general.length){valid=general;routingMode="平面道路備援";}
     }
 
-    if(!valid.length)throw new Error("已確認起點與終點之間存在道路，但目前可用路由服務沒有回傳符合「避開國道主線」條件的完整路線。請稍後再試。");
+    if(!valid.length)throw new Error("已確認起點與終點之間存在道路，但目前路由服務暫時沒有回傳可驗證的平面道路路線；系統已嘗試快速道路、道路吸附與平面道路備援。");
 
     routeCandidates=valid.map(route=>routeCandidateAnalysis(route)).filter(x=>x.coords.length>1).sort((a,b)=>a.route.duration-b.route.duration);
     const fast=routeCandidates[0];if(!fast)throw new Error("路由服務有回應，但沒有可繪製的完整道路幾何。");
     const maxAllowed=fast.route.duration*1.15+600;
     const pool=routeCandidates.filter(x=>x.route.duration<=maxAllowed);
     const dry=pool.slice().sort((a,b)=>a.rainMetric-b.rainMetric||a.route.duration-b.route.duration)[0];
-    routeCandidates=[fast];if(dry&&dry!==fast)routeCandidates.push(dry);
+    routeCandidates=[fast];
+    if(dry&&dry!==fast)routeCandidates.push(dry);
+    // 只有存在實際不同的第二條路線才顯示第二個選項，不虛構路線。
     activeRouteCandidateIndex=0;activeRouteEndpoints={from,to,routingMode};
     saveRouteHistoryItem(from,to);activateRouteCandidate(0);
   }catch(e){
