@@ -516,7 +516,8 @@ function routeHasForbiddenNationalMain(route){
     const text=routeStepText(step).replaceAll("臺","台");
     if(/國道\s*甲/.test(text))return false;
     if(nationalPattern.test(text))return true;
-    if(/(?:中山高速公路|福爾摩沙高速公路|北二高|二高|蔣渭水高速公路|北宜高速公路|水沙連高速公路)/.test(text))return true;
+    if(/(?:中山高速公路|福爾摩沙高速公路|北二高|二高|蔣渭水高速公路|北宜高速公路|水沙連高速公路|高速公路)/.test(text))return true;
+    if(step?.road_classification?.motorway_class===true)return true;
     const ref=String(step?.ref||"").replaceAll("臺","台").trim();
     if(/^國道\s*(1|2|3|4|5|6|7|8|9|10)\s*(號|線)?$/.test(ref))return true;
     return false;
