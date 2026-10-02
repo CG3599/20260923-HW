@@ -136,17 +136,23 @@ function buildDecisionSupport(r){
     Number.isFinite(r.pop)?("降雨機率 "+fmt(r.pop," %")):"降雨機率：資料缺失",
     Number.isFinite(r.windSpeed)?("風速 "+fmt(r.windSpeed," m/s")):"風速：資料缺失"
   ].filter(Boolean);
-  return {action,actionLabel,actionIcon,score:riding.score,reasons,evidence,advice:riding.advice};
+  return {
+    action,actionLabel,actionIcon,score:riding.score,reasons,evidence,
+    advice:riding.advice,rainGear:riding.rainGear,rainRisk:riding.rainRisk
+  };
 }
 
 function ridingAdvice(condition){
   const reasons=condition?.reasons||[];
   const level=condition?.level;
+  if(condition?.rainGear==="強烈建議攜帶"){
+    return "降雨風險較高，建議攜帶雨具並在出發前再次確認最新天氣。";
+  }
   if(level==="high"){
     return "目前騎乘條件較不利，出發前請重新確認最新天氣資訊，並留意降雨、風勢或極端溫度。";
   }
   if(level==="caution"){
-    if(reasons.includes("降雨機率高")||reasons.includes("降雨機率偏高")||reasons.includes("可能有降雨")){
+    if(reasons.some(x=>x.includes("降雨")||x.includes("陣雨")||x.includes("雷雨")||x.includes("大雨")||x.includes("豪雨"))){
       return "騎乘時需留意降雨，建議攜帶雨具並持續確認天氣變化。";
     }
     if(reasons.includes("風速強")||reasons.includes("風速偏強")||reasons.includes("風速較高")){
@@ -155,68 +161,127 @@ function ridingAdvice(condition){
     return "目前騎乘條件需注意，建議出發前再次確認天氣與路況。";
   }
   if(level==="normal"){
-    return "整體騎乘條件尚可，仍建議持續留意降雨與風勢變化。";
+    return condition?.rainGear==="建議攜帶"
+      ? "整體騎乘條件尚可，但有降雨可能，建議攜帶雨具並持續留意天氣。"
+      : "整體騎乘條件尚可，仍建議持續留意降雨與風勢變化。";
   }
-  return "目前天氣條件較穩定，適合一般騎乘；出發前仍可確認最新天氣資訊。";
+  return condition?.rainGear==="建議攜帶"
+    ? "目前騎乘條件穩定，但仍有降雨可能，建議攜帶雨具。"
+    : "目前天氣條件較穩定，適合一般騎乘；出發前仍可確認最新天氣資訊。";
+}
+
+function classifyRainRisk(pop,weather){
+  const text=String(weather||"").replaceAll("臺","台");
+  let weatherLevel=0;
+  if(/大豪雨|豪雨|強烈雷雨/.test(text))weatherLevel=4;
+  else if(/雷雨|雷陣雨|大雨|強陣雨/.test(text))weatherLevel=3;
+  else if(/短暫雨|短暫陣雨|午後.*陣雨|陣雨|有雨|降雨|持續降雨/.test(text))weatherLevel=1;
+  let popLevel=null;
+  if(Number.isFinite(pop)){
+    if(pop>=90)popLevel=4;
+    else if(pop>=70)popLevel=3;
+    else if(pop>=50)popLevel=2;
+    else if(pop>=20)popLevel=1;
+    else popLevel=0;
+  }
+  const riskLevel=Math.max(weatherLevel,popLevel==null?0:popLevel);
+  const penalty=Math.min(4,riskLevel);
+  let rainRisk="低";
+  if(riskLevel>=4)rainRisk="極高";
+  else if(riskLevel>=3)rainRisk="高";
+  else if(riskLevel>=2)rainRisk="中高";
+  else if(riskLevel>=1)rainRisk="中";
+  let rainGear="不需特別準備";
+  if(riskLevel>=4)rainGear="強烈建議攜帶";
+  else if(riskLevel>=2)rainGear="建議攜帶";
+  else if(riskLevel===1)rainGear="可考慮攜帶";
+  return {riskLevel,penalty,rainRisk,rainGear,weatherLevel,popLevel};
 }
 
 function ridingCondition(r){
   const temp=num(r?.temperature);
   const humidity=num(r?.humidity);
   const wind=num(r?.windSpeed);
-
-  // 騎乘條件僅依目前實際取得的非降雨資料進行估算。
-  // 降雨機率／雨量若缺失，不再視為 0%，也不因此阻止評分。
+  const pop=num(r?.pop);
+  const weather=String(r?.weather||"");
   let score=5;
   const reasons=[];
   const missing=[];
 
+  const rain=classifyRainRisk(pop,weather);
+  if(rain.penalty>0){
+    if(rain.popLevel>=4)reasons.push("降雨機率極高");
+    else if(rain.popLevel===3)reasons.push("降雨機率高");
+    else if(rain.popLevel===2)reasons.push("降雨機率偏高");
+    else if(rain.popLevel===1)reasons.push("有降雨可能");
+    if(rain.weatherLevel>=4)reasons.push("嚴重降雨");
+    else if(rain.weatherLevel===3)reasons.push("雷雨或強降雨");
+    else if(rain.weatherLevel===1 && !/晴時多雲|多雲/.test(weather))reasons.push("可能出現陣雨");
+  }
+  if(!Number.isFinite(pop))missing.push("降雨機率資料缺失");
+
+  let windPenalty=0;
   if(Number.isFinite(wind)){
-    if(wind>=7){score-=1;reasons.push(wind>=10?"風速強":"風速偏強");}
-    else if(wind>=5){reasons.push("風速較高");}
+    if(wind>=13){windPenalty=4;reasons.push("強風");}
+    else if(wind>=10){windPenalty=3;reasons.push("風速強");}
+    else if(wind>=7){windPenalty=2;reasons.push("風速偏強");}
+    else if(wind>=5){windPenalty=1;reasons.push("風速較高");}
   }else{
     missing.push("風速資料缺失");
   }
 
+  let tempPenalty=0;
   if(Number.isFinite(temp)){
-    if(temp>=35){score-=1;reasons.push("高溫");}
-    else if(temp>=32){reasons.push("炎熱");}
-    else if(temp<=10){score-=1;reasons.push("低溫");}
-    else if(temp<=15){reasons.push("氣溫偏低");}
+    if(temp>=35){tempPenalty=3;reasons.push("高溫");}
+    else if(temp>=33){tempPenalty=2;reasons.push("炎熱");}
+    else if(temp>=30){tempPenalty=1;reasons.push("氣溫偏高");}
+    else if(temp<10){tempPenalty=2;reasons.push("低溫");}
+    else if(temp<15){tempPenalty=1;reasons.push("氣溫偏低");}
   }else{
     missing.push("溫度資料缺失");
   }
 
+  let humidityPenalty=0;
   if(Number.isFinite(humidity)){
-    if(humidity>=90){
-      score-=1;
-      reasons.push("濕度高");
-    }
+    if(humidity>=90){humidityPenalty=1;reasons.push("濕度高");}
+    else if(humidity>=85){humidityPenalty=1;reasons.push("濕度偏高");}
   }else{
     missing.push("濕度資料缺失");
   }
 
-  // 降雨資料不納入分數；僅在畫面保留「資料未提供」的事實。
-  const rainDataMissing=!Number.isFinite(num(r?.pop));
-  if(rainDataMissing)reasons.push("降雨資料未納入評分");
-
-  const availableFactors=[temp,humidity,wind].filter(Number.isFinite).length;
+  const availableFactors=[temp,humidity,wind,pop].filter(Number.isFinite).length;
   if(missing.length)reasons.push("部分氣象資料缺失，評分僅依目前可用資料估算");
 
   const incomplete=availableFactors===0;
   if(incomplete){
     return {
-      score:null,
-      level:"normal",
-      label:"資料不足",
-      icon:"🟡",
+      score:null,level:"normal",label:"資料不足",icon:"🟡",
       reasons:reasons.length?reasons:["目前沒有可用的騎乘評估資料"],
-      missing,
-      incomplete:true,
-      weatherRisk:false,
-      advice:"目前缺少可用的溫度、濕度與風速資料，暫時無法估算騎乘條件。"
+      missing,incomplete:true,weatherRisk:false,rainRisk:rain.rainRisk,rainGear:rain.rainGear,
+      rainPenalty:rain.penalty,advice:"目前缺少可用的氣象資料，暫時無法估算騎乘條件。"
     };
   }
+
+  score-=rain.penalty+windPenalty+tempPenalty+humidityPenalty;
+
+  // 主要不利因素同時出現時，避免單項扣分不足以反映整體騎乘環境。
+  const majorFactors=[
+    rain.riskLevel>=1,
+    windPenalty>=1,
+    tempPenalty>=2
+  ].filter(Boolean).length;
+  if(majorFactors>=3){
+    score=Math.min(score,2);
+    reasons.push("多項主要不利因素同時存在");
+  }else if(majorFactors>=2){
+    score=Math.min(score,3);
+    reasons.push("同時存在多項不利因素");
+  }
+
+  // 嚴重降雨／雷雨設定最高分，避免其他舒適條件抵銷明顯的降雨風險。
+  if(rain.weatherLevel>=4)score=Math.min(score,1);
+  else if(rain.weatherLevel===3)score=Math.min(score,2);
+  else if(rain.weatherLevel===1)score=Math.min(score,4);
 
   score=Math.max(0,Math.min(5,score));
 
@@ -225,10 +290,14 @@ function ridingCondition(r){
   else if(score===2){level="caution";label="需注意";icon="🟠";}
   else if(score===3){level="normal";label="普通";icon="🟡";}
 
-  const condition={score,level,label,icon,reasons,missing,incomplete:false,weatherRisk:false};
+  const condition={
+    score,level,label,icon,reasons,missing,incomplete:false,
+    weatherRisk:rain.riskLevel>=2,rainRisk:rain.rainRisk,rainGear:rain.rainGear,
+    rainPenalty:rain.penalty
+  };
   condition.advice=missing.length
-    ? "目前以已取得的溫度、濕度與風速資料估算騎乘條件；部分資料缺失，結果可能存在誤差。"
-    : "目前以已取得的氣象資料估算騎乘條件；出發前仍建議確認最新預報。";
+    ? "目前以已取得的氣象資料估算騎乘條件；部分資料缺失，結果可能存在誤差。"
+    : ridingAdvice(condition);
   return condition;
 }
 function ridingLevel(score){
