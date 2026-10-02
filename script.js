@@ -566,7 +566,7 @@ function routeClass(level){return level==="high"?"route-high":level==="caution"?
 function routeCandidateAnalysis(route){
   const coords=(route?.geometry?.coordinates||[]).map(p=>[p[1],p[0]]);
   const nearby=[];const seen=new Set();
-  for(const p of sampleRoutePoints(coords,30)){const hit=nearestWeatherRow(p[0],p[1]);if(hit){const weatherRow=routeWeatherRow(hit.row);if(!seen.has(weatherRow.city+"||"+weatherRow.town)){seen.add(weatherRow.city+"||"+weatherRow.town);nearby.push({...hit,row:weatherRow});}}if(false&&hit&&!seen.has(hit.row.city+"||"+hit.row.town)){seen.add(hit.row.city+"||"+hit.row.town);nearby.push(hit);}}
+  for(const p of sampleRoutePoints(coords,30)){const hit=nearestWeatherRow(p[0],p[1]);if(hit){const weatherRow=routeWeatherRow(hit.row);if(!seen.has(weatherRow.city+"||"+weatherRow.town)){seen.add(weatherRow.city+"||"+weatherRow.town);nearby.push({...hit,row:weatherRow});}}}
   const conditions=nearby.map(x=>x.row.riding||ridingCondition(x.row)).filter(c=>Number.isFinite(c.score));
   const rainLevels=nearby.map(x=>(x.row.riding||ridingCondition(x.row)).rainPenalty||0);
   const pops=nearby.map(x=>x.row.pop).filter(Number.isFinite);
@@ -1314,8 +1314,9 @@ async function loadWeather(){
     }
     populateForecastDateSelect();
     populateRouteDateSelect();
+    populateRouteDateSelect();
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
-    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();populateRouteDateSelect();
+    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();populateRouteDateSelect();populateRouteDateSelect();
     lazyLoadTaiwanMap();
     $("#updatedAt").textContent=formatTaiwanDateTime(new Date());
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
