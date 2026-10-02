@@ -895,77 +895,126 @@ async function requestOsrmTierCandidates(coords){
   return all;
 }
 async function requestSegmentedRoute(from,to,mode){
-  const bases=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
-  for(const root of bases){
-    const resolved=await resolveCorridorAnchors(root,from,to,mode);
-    if(!resolved)continue;
-    const anchors=resolved.anchors;
-    const parts=[];
-    let failed=false;
-    for(let i=0;i<anchors.length-1;i++){
-      const a=anchors[i].location,b=anchors[i+1].location;
-      const q="?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&annotations=true";
-      const routes=await requestOsrmRoutes(
-        root+"route/v1/driving/"+a[0]+","+a[1]+";"+b[0]+","+b[1],
-        q,20000,
-        {context:"corridor-segment-route",segment:i+" / "+(anchors.length-1),mode,from:a,to:b}
-      );
-      const candidates=routes.filter(r=>!routeHasForbiddenNationalMain(r));
-      if(!candidates.length){
-        failed=true;
-        routeDiagnosticEntry({
-          kind:"segment-failure",
-          provider:root,
-          context:"corridor-segment-route",
-          segment:i+" / "+(anchors.length-1),
-          mode,
-          reason:"all candidates contain national freeway or no route"
-        });
-        break;
-      }
-      let chosen;
-      if(mode==="expressway"){
-        const express=candidates.filter(r=>routeHasExpressway(r));
-        chosen=(express.slice().sort((x,y)=>Number(x.duration||Infinity)-Number(y.duration||Infinity))[0]||
-          candidates.slice().sort((x,y)=>Number(x.duration||Infinity)-Number(y.duration||Infinity))[0]);
-      }else{
-        const flat=candidates.filter(r=>!routeHasExpressway(r));
-        chosen=(flat.slice().sort((x,y)=>Number(x.duration||Infinity)-Number(y.duration||Infinity))[0]||
-          candidates.slice().sort((x,y)=>Number(x.duration||Infinity)-Number(y.duration||Infinity))[0]);
-      }
-      parts.push(chosen);
+  if(mode==="flat"){
+    const route=await requestValhallaFlatRoute(from,to,[]);
+    return route&&!routeHasForbiddenNationalMain(route)?route:null;
+  }
+  const spine=await buildExpresswaySpine(from,to);
+  if(!spine||spine.length<2)return null;
+  const points=spine.map(p=>({latitude:p[1],longitude:p[0]})),segments=[];
+  for(let i=0;i<points.length-1;i++){
+    const segment=await requestStrategySegment(points[i],points[i+1],"expressway",i,points.length-1);
+    if(!segment)return null;
+    segments.push(segment);
+  }
+  const merged=mergeRouteSegments(segments);
+  return merged&&!routeHasForbiddenNationalMain(merged)&&routeHasExpressway(merged)?merged:null;
+}
+function strategyBbox(from,to,pad=0.28){return [Math.min(from.latitude,to.latitude)-pad,Math.max(from.latitude,to.latitude)+pad,Math.min(from.longitude,to.longitude)-pad,Math.max(from.longitude,to.longitude)+pad];}
+async function fetchExpresswayNetwork(from,to){
+  const [south,north,west,east]=strategyBbox(from,to);
+  const query='[out:json][timeout:35];way["highway"~"^(trunk|trunk_link)$"]('+south+','+west+','+north+','+east+');out geom;';
+  for(const endpoint of ["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"]){
+    try{
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),40000);
+      const res=await fetch(endpoint+"?data="+encodeURIComponent(query),{signal:controller.signal});
+      clearTimeout(timer);
+      const data=await res.json().catch(()=>null);
+      if(res.ok&&Array.isArray(data?.elements)&&data.elements.length)return data.elements;
+    }catch(_){}
+  }
+  return [];
+}
+function buildExpresswayGraph(ways){
+  const nodes=new Map(),edges=new Map(),keyOf=(lat,lon)=>lat.toFixed(6)+","+lon.toFixed(6);
+  const add=(a,b,way)=>{
+    if(!edges.has(a))edges.set(a,[]);
+    if(!edges.has(b))edges.set(b,[]);
+    const pa=nodes.get(a),pb=nodes.get(b);if(!pa||!pb)return;
+    const w=routeDistance([pa.lat,pa.lon],[pb.lat,pb.lon]);
+    edges.get(a).push({to:b,w,way});edges.get(b).push({to:a,w,way});
+  };
+  for(const way of ways||[]){
+    let prev=null;
+    for(const p of way.geometry||[]){
+      const lat=Number(p.lat),lon=Number(p.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
+      const key=keyOf(lat,lon);nodes.set(key,{lat,lon});if(prev)add(prev,key,way);prev=key;
     }
-    if(failed||!parts.length)continue;
-    const coords=[],legs=[];let distance=0,duration=0;
-    for(const part of parts){
-      distance+=Number(part.distance||0);
-      duration+=Number(part.duration||0);
-      const geometry=part.geometry?.coordinates||[];
-      if(geometry.length)coords.push(...(coords.length?geometry.slice(1):geometry));
-      legs.push(...(part.legs||[]));
+  }
+  return {nodes,edges};
+}
+function nearestGraphNode(graph,lat,lon){
+  let best=null,bestD=Infinity;
+  for(const [key,p] of graph.nodes){
+    const d=routeDistance([lat,lon],[p.lat,p.lon]);
+    if(d<bestD){bestD=d;best={key,p,distance:d};}
+  }
+  return best;
+}
+function dijkstraGraph(graph,startKey,endKey){
+  const dist=new Map([[startKey,0]]),prev=new Map(),open=new Set([startKey]);
+  while(open.size){
+    let current=null,best=Infinity;
+    for(const key of open){const d=dist.get(key);if(d<best){best=d;current=key;}}
+    open.delete(current);if(current===endKey)break;
+    for(const edge of graph.edges.get(current)||[]){
+      const nd=best+edge.w;
+      if(nd<(dist.get(edge.to)??Infinity)){dist.set(edge.to,nd);prev.set(edge.to,current);open.add(edge.to);}
     }
-    if(coords.length>1){
-      const route={distance,duration,geometry:{type:"LineString",coordinates:coords},legs};
-      if(!routeHasForbiddenNationalMain(route)){
-        route._routingMode=mode;
-        return route;
-      }
-    }
+  }
+  if(!dist.has(endKey))return [];
+  const path=[];let cur=endKey;
+  while(cur){path.push(cur);if(cur===startKey)break;cur=prev.get(cur);}
+  return path.reverse();
+}
+function buildExpresswaySpine(from,to){
+  return fetchExpresswayNetwork(from,to).then(ways=>{
+    if(!ways.length)return null;
+    const graph=buildExpresswayGraph(ways);
+    const start=nearestGraphNode(graph,from.latitude,from.longitude),end=nearestGraphNode(graph,to.latitude,to.longitude);
+    if(!start||!end||start.distance>45000||end.distance>45000)return null;
+    const keys=dijkstraGraph(graph,start.key,end.key);
+    if(keys.length<2)return null;
+    const raw=keys.map(k=>{const p=graph.nodes.get(k);return[p.lon,p.lat];});
+    return dedupeRoutePoints([[from.longitude,from.latitude],...sampleLineString(raw,35000),[to.longitude,to.latitude]]);
+  });
+}
+function sampleLineString(points,maxMeters){
+  if(!points||points.length<2)return points||[];
+  const out=[points[0]];let carry=0;
+  for(let i=1;i<points.length;i++){
+    carry+=routeDistance([points[i-1][1],points[i-1][0]],[points[i][1],points[i][0]]);
+    if(carry>=maxMeters){out.push(points[i]);carry=0;}
+  }
+  if(out[out.length-1]!==points[points.length-1])out.push(points[points.length-1]);
+  return out;
+}
+function dedupeRoutePoints(points){
+  const out=[];
+  for(const p of points||[]){
+    if(!out.length||routeDistance([out[out.length-1][1],out[out.length-1][0]],[p[1],p[0]])>50)out.push(p);
+  }
+  return out;
+}
+async function requestStrategySegment(from,to,mode,index,total){
+  for(const root of ["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"]){
+    const url=root+"route/v1/driving/"+from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude;
+    const routes=await requestOsrmRoutes(url,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false",20000,{context:"strategy-segment",segment:index+" / "+total,mode});
+    const valid=routes.filter(r=>!routeHasForbiddenNationalMain(r));
+    const express=valid.filter(routeHasExpressway);
+    if(express.length)return express[0];
   }
   return null;
 }
-function decodePolyline6(str){
-  let index=0,lat=0,lng=0,out=[];
-  while(index<str.length){
-    let result=0,shift=0,b;
-    do{b=str.charCodeAt(index++)-63;result|=(b&31)<<shift;shift+=5;}while(b>=32);
-    lat+=result&1?~(result>>1):result>>1;
-    result=0;shift=0;
-    do{b=str.charCodeAt(index++)-63;result|=(b&31)<<shift;shift+=5;}while(b>=32);
-    lng+=result&1?~(result>>1):result>>1;
-    out.push([lat/1e6,lng/1e6]);
+function mergeRouteSegments(segments){
+  const coordinates=[],steps=[];let distance=0,duration=0;
+  for(const route of segments||[]){
+    const c=route?.geometry?.coordinates||[];
+    if(c.length)coordinates.push(...(coordinates.length?c.slice(1):c));
+    steps.push(...((route?.legs||[]).flatMap(l=>l?.steps||[])));
+    distance+=Number(route.distance||0);duration+=Number(route.duration||0);
   }
-  return out;
+  return coordinates.length>1?{distance,duration,geometry:{type:"LineString",coordinates},legs:[{steps}]}:null;
 }
 async function requestValhallaFlatRoute(from,to,waypoints=[]){
   const locations=[from,...waypoints,to].map(r=>({lat:r.latitude,lon:r.longitude,type:"break"}));
@@ -1050,60 +1099,18 @@ async function analyzeRoute(){
   const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
   if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return;}
   if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return;}
-  const button=$("#analyzeRouteBtn");button.disabled=true;button.textContent="正在依道路階層規劃路線…";
+  const button=$("#analyzeRouteBtn");button.disabled=true;button.textContent="正在依道路策略規劃路線…";
   try{
-    const direct=from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude;
-    const connected=await requestRouteFromServers(direct,"?overview=false&geometries=geojson&steps=true&alternatives=1");
-    if(!connected.length)throw new Error("起點與終點目前無法由路由服務建立道路連通；請稍後再試。");
-
-    // 第一層：國道永遠禁止。先取得所有可驗證的非 motorway 候選。
-    let candidates=await requestOsrmTierCandidates(direct);
-    let express=candidates.filter(r=>routeRoadTier(r)===2);
-    let routingMode="國道禁止";
-
-    // 第二層：只要有快速道路候選，就只在快速道路層選擇。
-    if(express.length){
-      candidates=express;routingMode="國道禁止／快速道路優先";
-    }else{
-      // 第二層找不到快速道路，才進入第三層：真正的分段平面道路搜尋。
-      const segmentedExpress=await requestSegmentedRoute(from,to,"expressway");
-      if(segmentedExpress&&!routeHasForbiddenNationalMain(segmentedExpress)&&routeHasExpressway(segmentedExpress)){
-        candidates=[segmentedExpress];routingMode="國道禁止／快速道路分段搜尋";
-      }else{
-        const segmentedFlat=await requestSegmentedRoute(from,to,"flat");
-        if(segmentedFlat&&!routeHasForbiddenNationalMain(segmentedFlat)){
-          candidates=[segmentedFlat];routingMode="國道禁止／一般平面道路分段搜尋";
-        }else{
-          // 最後才使用 Valhalla 作為獨立的平面道路備援。
-          // 舊版曾呼叫已移除的 buildDetourWaypoints()，會造成
-          // ReferenceError；現在不再依賴不存在的繞行函式，也不再疊加
-          // 無法驗證的人工 detour waypoint。
-          const fallbackRoute=await requestValhallaFlatRoute(from,to,[]);
-          if(fallbackRoute&&!routeHasForbiddenNationalMain(fallbackRoute)){
-            candidates=[fallbackRoute];
-            routingMode="國道禁止／一般平面道路備援";
-          }
-        }
-      }
+    let route=await requestSegmentedRoute(from,to,"expressway");
+    let routingMode="國道禁止／快速道路優先";
+    if(!route){
+      route=await requestSegmentedRoute(from,to,"flat");
+      routingMode="國道禁止／一般平面道路";
     }
-
-    if(!candidates.length)throw new Error("已確認起點與終點存在道路，但目前無法建立符合「國道禁止 → 快速道路優先 → 平面道路」規則的完整路線。");
-
-    // 國道永遠淘汰；同一層內才比較時間。
-    candidates=candidates.filter(r=>routeRoadTier(r)>0);
-    if(!candidates.length)throw new Error("路由服務回傳的候選路線均含國道主線，已全部排除。");
-
-    routeCandidates=candidates.map(route=>routeCandidateAnalysis(route)).filter(x=>x.coords.length>1).sort((a,b)=>a.route.duration-b.route.duration);
-    const fast=routeCandidates[0];
-    if(!fast)throw new Error("路由服務有回應，但沒有可繪製的完整道路幾何。");
-
-    // 低降雨路線只從「同一優先道路層」的真實候選中產生，不虛構第二條。
-    const maxAllowed=fast.route.duration*1.25+900;
-    const pool=routeCandidates.filter(x=>x.route.duration<=maxAllowed);
-    const dry=pool.slice().sort((a,b)=>a.rainMetric-b.rainMetric||a.route.duration-b.route.duration)[0];
-    routeCandidates=[fast];
-    if(dry&&dry!==fast)routeCandidates.push(dry);
-
+    if(!route)throw new Error("目前找不到符合「國道禁止 → 快速道路優先 → 平面道路」規則的完整路線。");
+    if(routeHasForbiddenNationalMain(route))throw new Error("路線驗證失敗：候選路線包含國道，已拒絕顯示。");
+    routeCandidates=[routeCandidateAnalysis(route)].filter(x=>x.coords.length>1);
+    if(!routeCandidates.length)throw new Error("路由服務有回應，但沒有可繪製的完整道路幾何。");
     activeRouteCandidateIndex=0;
     activeRouteEndpoints={from,to,routingMode};
     saveRouteHistoryItem(from,to);
