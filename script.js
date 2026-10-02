@@ -743,7 +743,7 @@ async function requestOsrmTierCandidates(coords){
   const bases=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
   const queries=[
     "?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway",
-    "?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway&annotations=true"
+    "?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&annotations=true"
   ];
   const all=[],seen=new Set();
   for(const root of bases){
@@ -785,7 +785,11 @@ async function requestSegmentedRoute(from,to,mode){
       const q="?overview=full&geometries=geojson&steps=true&alternatives=2&continue_straight=false&exclude=motorway";
       const parts=[];
       for(let i=0;i<snapped.length-1;i++){
-        const routes=await requestOsrmRoutes(root+"route/v1/driving/"+snapped[i]+";"+snapped[i+1],q,20000,{context:"segmented-route",segment:i+" / "+(snapped.length-1),mode,from:snapped[i],to:snapped[i+1]});
+        let routes=await requestOsrmRoutes(root+"route/v1/driving/"+snapped[i]+";"+snapped[i+1],q,20000,{context:"segmented-route",segment:i+" / "+(snapped.length-1),mode,from:snapped[i],to:snapped[i+1]});
+        if(!routes.length){
+          const fallbackQ="?overview=full&geometries=geojson&steps=true&alternatives=2&continue_straight=false&annotations=true";
+          routes=await requestOsrmRoutes(root+"route/v1/driving/"+snapped[i]+";"+snapped[i+1],fallbackQ,20000,{context:"segmented-route-fallback-no-exclude",segment:i+" / "+(snapped.length-1),mode,from:snapped[i],to:snapped[i+1]});
+        }
         const candidates=routes.filter(r=>!routeHasForbiddenNationalMain(r));
         if(!candidates.length){failed=true;break;}
         let chosen;
