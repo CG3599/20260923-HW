@@ -498,10 +498,19 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 }
 
 .route-date-field{margin-top:12px;position:relative}
-.route-date-field label{display:block;margin-bottom:6px;font-size:.82rem;color:#94a3b8;font-weight:700}
-.route-date-field select{width:100%;appearance:none;padding:11px 40px 11px 12px;border-radius:12px;border:1px solid rgba(148,163,184,.22);background:linear-gradient(135deg,#111a30,#17213a);color:#e2e8f0;font-weight:700;cursor:pointer}
-.route-date-field:after{content:"⌄";position:absolute;right:14px;bottom:10px;color:#7dd3fc;font-size:1.1rem;pointer-events:none}
+.route-date-field label{display:block;margin-bottom:6px;color:#8e9bb8;font-size:.8rem}
+.route-date-field select{appearance:none;-webkit-appearance:none;width:100%;background:linear-gradient(135deg,#111a30,#17213a);color:#eef2ff;border:1px solid #34415e;border-radius:13px;padding:12px 42px 12px 14px;outline:none;font-weight:700;cursor:pointer;box-shadow:inset 0 1px #ffffff08}
+.route-date-field:after{content:"⌄";position:absolute;right:15px;bottom:10px;color:#7dd3fc;font-size:1.15rem;pointer-events:none}
+.route-date-field select:hover{border-color:#4f668d;background:linear-gradient(135deg,#15213b,#1b2a48)}
 .route-date-field select:focus{border-color:#7dd3fc;box-shadow:0 0 0 3px #7dd3fc18;outline:none}
+.route-date-field select option{background:#111a30;color:#eef2ff}
+.route-date-field select option:checked{background:#1b2946;color:#fff}
+.route-weather-popup .leaflet-popup-content{margin:0}
+.route-weather-popup .leaflet-popup-content-wrapper{padding:0;background:transparent;box-shadow:0 16px 40px rgba(0,0,0,.38)}
+.route-weather-popup .leaflet-popup-tip{background:#121b31}
+.route-endpoint-popup.weather-card{margin:0;border:0;box-shadow:none;max-width:350px;padding:18px}
+.route-endpoint-popup .weather-details-collapse{margin-top:4px}
+.route-endpoint-popup .riding-panel{margin-top:14px}
 .rain-gear-advice{align-items:flex-start!important;flex-wrap:wrap!important}
 .rain-gear-advice span{flex:0 0 auto}
 .rain-gear-advice strong{max-width:100%;text-align:right;line-height:1.45;overflow-wrap:anywhere}
@@ -533,3 +542,6 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
   .forecast-day-list{grid-template-columns:repeat(7,minmax(128px,1fr));overflow-x:auto}
   .forecast-day-list .three-day-item{min-width:128px}
 }
+
+.route-endpoint-popup .forecast-time{margin-top:12px}
+@media(max-width:560px){.route-endpoint-popup.weather-card{max-width:300px;padding:15px}.route-weather-popup .leaflet-popup-content{max-width:300px}}
