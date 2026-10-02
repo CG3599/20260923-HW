@@ -588,28 +588,8 @@ function saveRouteHistoryItem(from,to){
   renderRouteHistory();
 }
 function routeEndpointPopupHTML(r,icon,label){
-  const c=r.riding||ridingCondition(r);
-  const levelClass=c.level||"normal";
-  const reasons=(c.reasons&&c.reasons.length)?c.reasons.join("、"):"目前沒有明顯不利因素";
-  const score=Number.isFinite(c.score)?c.score:"--";
-  return '<div class="route-endpoint-popup weather-card '+levelClass+'">'+
-    '<div class="card-top"><div><h3 class="city">'+r.city+'</h3><p class="town">'+r.town+'</p></div><div class="card-tools"><span class="weather-icon">'+icon+'</span></div></div>'+
-    '<div class="temperature"><span class="temp">'+fmt(r.temperature)+'</span><small>°C</small></div>'+
-    '<div class="weather-name">'+(r.weather||"資料待更新")+'</div>'+
-    '<details class="weather-details-collapse" open><summary>🌦️ 詳細天氣資訊</summary><div class="details">'+
-      '<div><span>💧 濕度</span><strong>'+fmt(r.humidity," %")+'</strong></div>'+
-      '<div><span>🌧️ 降雨機率</span><strong>'+fmt(r.pop," %")+'</strong></div>'+
-      '<div><span>💨 風向</span><strong>'+(r.windDirection||"--")+'</strong></div>'+
-      '<div><span>💨 風速</span><strong>'+fmt(r.windSpeed," m/s")+'</strong></div>'+
-    '</div></details>'+
-    '<div class="riding-panel riding-'+levelClass+'"><div class="riding-head"><span>🏍️ 騎乘條件</span><strong class="riding-level">'+(c.icon||"🟡")+" "+(c.label||"資料不足")+'</strong></div>'+
-      '<div class="riding-score-row"><div class="score-ring"><strong>'+score+'</strong><span>Score</span></div><div class="riding-meta">'+
-        '<div class="riding-reasons"><span>主要因素</span><strong>'+reasons+'</strong></div>'+
-        '<div class="riding-advice"><span>💡 騎士建議</span><p>'+(c.advice||"--")+'</p></div>'+
-        '<div class="rain-gear-advice"><span>☔ 雨具建議</span><strong class="rain-gear-value">'+(c.rainGear||"--")+'</strong></div>'+
-      '</div></div></div>'+
-    '<div class="forecast-time">預報時間：'+(r.start?formatTaiwanDateTime(r.start):"--")+'</div>'+
-  '</div>';
+  const riding=r.riding||ridingCondition(r);
+  return '<div class="weather-popup"><h4>'+r.city+"｜"+r.town+'</h4><div class="weather-temp">'+fmt(r.temperature," °C")+'</div><p>💧 濕度：'+fmt(r.humidity," %")+'</p><p>🌧️ 降雨機率：'+fmt(r.pop," %")+'</p><p>💨 風向：'+(r.windDirection||"--")+'</p><p>💨 風速：'+fmt(r.windSpeed," m/s")+'</p><p><strong>🏍️ 騎乘條件：'+(riding.icon||"")+" "+(riding.label||"--")+'</strong></p><p>評分：'+(Number.isFinite(riding.score)?riding.score:"--")+'</p><p>☔ 雨具建議：'+(riding.rainGear||"--")+'</p><p class="popup-muted">'+(riding.reasons?.length?"主要因素："+riding.reasons.join("、")+"<br>":"")+(riding.advice||"")+'</p></div>';
 }
 function renderRouteEndpoints(from,to){
   routeEndpointMarkers.forEach(m=>m.remove());routeEndpointMarkers=[];if(!taiwanMap)return;
@@ -1428,7 +1408,7 @@ async function renderTaiwanMap(){
     const marker=L.circleMarker([r.latitude,r.longitude],{
       radius:s.radius,fillColor:s.fillColor,color:s.color,weight:1.5,fillOpacity:.82
     }).addTo(taiwanMap);
-    marker.bindPopup(routeEndpointPopupHTML(r,icon(r.weather),"縣市標記"),{maxWidth:380,minWidth:300,className:"route-weather-popup"});
+    marker.bindPopup('<div class="weather-popup"><h4>'+r.city+"｜"+r.town+'</h4><div class="weather-temp">'+fmt(r.temperature," °C")+'</div><p>💧 濕度：'+fmt(r.humidity," %")+'</p><p>🌧️ 降雨機率：'+fmt(r.pop," %")+'</p><p>💨 風向：'+(r.windDirection||"--")+'</p><p>💨 風速：'+fmt(r.windSpeed," m/s")+'</p><p><strong>🏍️ 騎乘條件：'+(riding.icon||"")+" "+(riding.label||"--")+'</strong></p><p>評分：'+(Number.isFinite(riding.score)?riding.score:"--")+'</p><p>☔ 雨具建議：'+(riding.rainGear||"--")+'</p><p class="popup-muted">'+(riding.reasons?.length?"主要因素："+riding.reasons.join("、")+"<br>":"")+(riding.advice||"")+'</p></div>');
     weatherMarkers.push(marker);
   });
   if(defaults.length){
