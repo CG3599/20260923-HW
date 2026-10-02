@@ -1275,6 +1275,7 @@ async function renderTaiwanMap(){
   }else{
     taiwanMap.setView([23.7,121.0],7);
   }
+  if(activeRouteEndpoints)renderRouteEndpoints(activeRouteEndpoints.from,activeRouteEndpoints.to);
   setTimeout(()=>taiwanMap.invalidateSize(),100);
 }
 
