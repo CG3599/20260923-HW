@@ -445,6 +445,34 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
   font-size:.68rem;
   line-height:1.55;
 }
+.route-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.route-option{border:1px solid #33415f;border-radius:13px;background:linear-gradient(135deg,rgba(13,21,40,.96),rgba(25,37,62,.86));padding:12px;text-align:left;cursor:pointer;color:#e5edff;transition:.18s ease}
+.route-option:hover{border-color:#4f7890;transform:translateY(-1px)}
+.route-option.active{border-color:#7dd3fc;box-shadow:0 0 0 2px #7dd3fc18}
+.route-option-title{display:flex;justify-content:space-between;gap:8px;align-items:center;font-weight:900}
+.route-option-title span{font-size:.68rem;color:#7dd3fc;font-weight:700}
+.route-option-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.route-option-meta span{font-size:.68rem;color:#aeb9d6;padding:4px 7px;border-radius:7px;background:#111b31}
+.route-option-note{margin-top:7px;color:#8190ad;font-size:.68rem;line-height:1.45}
+.route-history-collapse{margin-top:14px;border:1px solid #293755;border-radius:13px;background:rgba(11,16,32,.58);overflow:hidden}
+.route-history-collapse>summary{cursor:pointer;list-style:none;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;color:#dbeafe;font-weight:800}
+.route-history-collapse>summary::-webkit-details-marker{display:none}
+.route-history-collapse>summary:after{content:"＋";color:#7dd3fc}
+.route-history-collapse[open]>summary{border-bottom:1px solid #293755}
+.route-history-collapse[open]>summary:after{content:"−"}
+.route-history-count{font-size:.68rem;color:#71809d;font-weight:600}
+.route-history-list{padding:8px}
+.route-history-item{width:100%;border:0;border-bottom:1px solid rgba(148,163,184,.1);background:transparent;color:#cbd5e1;padding:11px 9px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.route-history-item:last-child{border-bottom:0}
+.route-history-item:hover{background:rgba(30,41,70,.55)}
+.route-history-route{font-size:.76rem;font-weight:800}
+.route-history-time{display:block;color:#71809d;font-size:.62rem;margin-top:3px}
+.route-history-arrow{color:#7dd3fc}
+.route-endpoint-popup{min-width:210px}
+.route-endpoint-popup h4{margin:0 0 8px;color:#e5edff}
+.route-endpoint-popup .endpoint-score{padding:8px 10px;border-radius:9px;background:#111b31;margin:8px 0}
+@media(max-width:700px){.route-options{grid-template-columns:1fr}}
+@media(max-width:560px){.route-history-collapse>summary{padding:11px 12px}.route-history-item{padding:10px 7px}}
 
 
 
