@@ -662,6 +662,14 @@ function buildDetourWaypoints(from,to){
   }
   return candidates;
 }
+async function requestOsrmNearest(base,lat,lon,timeoutMs=10000){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const res=await fetch(base+"nearest/v1/driving/"+lon+","+lat+"?number=1",{signal:controller.signal});
+    const data=await res.json().catch(()=>null);
+    return res.ok&&data?.code==="Ok"&&data?.waypoints?.[0]?.location?data.waypoints[0].location:null;
+  }catch(_){return null}finally{clearTimeout(timer);}
+}
 async function requestSnappedAvoidMotorway(from,waypoints,to){
   const roots=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
   const raw=[from,...waypoints,...[to]];
