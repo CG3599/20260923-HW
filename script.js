@@ -261,8 +261,17 @@ function formatForecastDate(key){
   if(!key)return "";
   const d=new Date(key+"T00:00:00+08:00");
   if(Number.isNaN(d.getTime()))return key;
-  const label=new Intl.DateTimeFormat("zh-TW",{timeZone:"Asia/Taipei",month:"numeric",day:"numeric",weekday:"short"}).format(d);
-  return label.replace(/\\s+/g,"");
+  const month=String(d.getMonth()+1).padStart(2,"0");
+  const day=String(d.getDate()).padStart(2,"0");
+  const weekday=["日","一","二","三","四","五","六"][d.getDay()];
+  return month+"/"+day+" (週"+weekday+")";
+}
+function formatTaiwanDateTime(value){
+  const d=value instanceof Date?value:new Date(value);
+  if(Number.isNaN(d.getTime()))return "--";
+  const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).formatToParts(d);
+  const get=t=>parts.find(p=>p.type===t)?.value||"00";
+  return get("year")+"/"+get("month")+"/"+get("day")+" "+get("hour")+":"+get("minute")+":"+get("second");
 }
 function rowForDate(r,dateKey=state.selectedDate){
   if(!r)return null;
@@ -430,12 +439,25 @@ function routeStepText(step){
 }
 function routeHasForbiddenNationalMain(route){
   const steps=(route?.legs||[]).flatMap(leg=>leg?.steps||[]);
+  const nationalNames=[
+    "國道一號","中山高速公路",
+    "國道二號","機場支線","桃園內環線",
+    "國道三號","福爾摩沙高速公路","二高","北二高",
+    "國道四號","台中環線",
+    "國道五號","蔣渭水高速公路","北宜高速公路",
+    "國道六號","水沙連高速公路",
+    "國道八號","台南支線",
+    "國道十號","高雄支線"
+  ];
+  const nationalPattern=/國道\s*(1|2|3|4|5|6|7|8|10)\s*(號|線)?/;
   return steps.some(step=>{
     const text=routeStepText(step).replaceAll("臺","台");
-    if(/國道/.test(text)&&/甲/.test(text))return false;
-    if(/國道\s*(1|2|3|4|5|6|7|8|10)\s*(號|線)?/.test(text))return true;
-    const ref=String(step?.ref||"").trim();
-    return /^(1|2|3|4|5|6|7|8|10)(甲)?$/.test(ref) && !/甲/.test(ref) && (step?.road_classification?.motorway_class===true);
+    if(/國道\s*甲/.test(text))return false;
+    if(nationalPattern.test(text)||nationalNames.some(name=>text.includes(name)))return true;
+    const ref=String(step?.ref||"").trim().replaceAll("臺","台");
+    if(/^(1|2|3|4|5|6|7|8|10)$/.test(ref)&&step?.road_classification?.motorway_class===true)return true;
+    if(step?.road_classification?.motorway_class===true && /高速公路/.test(text))return true;
+    return false;
   });
 }
 function routePolicyLabel(route){
@@ -570,6 +592,36 @@ async function analyzeRoute(){
     box.innerHTML="<strong>路線分析失敗</strong><p class=\"route-hint\">"+e.message+"</p>";
   }finally{
     button.disabled=false;button.textContent="分析這段路的可騎行性";
+  }
+}
+function clearRoute(){
+  clearRouteMotorcycleAnimation();
+  if(routeLayer){
+    routeLayer.remove();
+    routeLayer=null;
+  }
+  const from=routeSearchElements("from"),to=routeSearchElements("to");
+  [from,to].forEach(e=>{
+    if(!e)return;
+    e.input.value="";
+    e.input.dataset.city="";
+    e.input.dataset.mode="";
+    e.input.dataset.index="-1";
+    e.value.value="";
+    e.suggestions.innerHTML="";
+    e.suggestions.classList.add("hidden");
+    e.townWrap.classList.add("hidden");
+    e.town.innerHTML='<option value="">請先選擇縣市</option>';
+  });
+  const box=$("#routeResult");
+  if(box){
+    box.className="route-result hidden";
+    box.innerHTML="";
+  }
+  const button=$("#analyzeRouteBtn");
+  if(button){
+    button.disabled=false;
+    button.textContent="分析這段路的可騎行性";
   }
 }
 function normalizeDefaultLocation(value){
@@ -726,6 +778,8 @@ function populateTownSelect(city,selected=""){
 }
 function renderTownResult(city,town){
   const r=selectedRows().find(x=>x.city===city&&x.town===town);if(!r)return;
+  state.selectedCity=city;
+  state.selectedTown=town;
   openDefaultCities();
   renderRows([r],false);
   $("#searchHint").textContent="目前顯示："+city+"｜"+town+"。選擇其他鄉鎮即可切換。";
@@ -880,12 +934,15 @@ let weatherMarkers=[];
 let routeLayer=null;
 let routeMotorcycleMarker=null;
 let routeAnimationFrame=null;
+let routeAnimationRestartTimer=null;
 let routeAnimationToken=0;
 
 function clearRouteMotorcycleAnimation(){
   routeAnimationToken++;
   if(routeAnimationFrame!=null)cancelAnimationFrame(routeAnimationFrame);
   routeAnimationFrame=null;
+  if(routeAnimationRestartTimer!=null)clearTimeout(routeAnimationRestartTimer);
+  routeAnimationRestartTimer=null;
   if(routeMotorcycleMarker&&taiwanMap){
     taiwanMap.removeLayer(routeMotorcycleMarker);
   }
@@ -925,11 +982,13 @@ function startRouteMotorcycleAnimation(coords){
     iconSize:[34,34],
     iconAnchor:[17,17]
   });
-  routeMotorcycleMarker=L.marker([points[0].lat,points[0].lng],{icon,zIndexOffset:1000,interactive:false}).addTo(taiwanMap);
+  routeMotorcycleMarker=L.marker([points[0].lat,points[0].lng],{
+    icon,zIndexOffset:1000,interactive:false
+  }).addTo(taiwanMap);
 
-  // 提高動畫速度：約 45 m/s，並縮短長路線的最長動畫時間。
+  // 約 45 m/s；抵達終點後停留 5 秒，再重用同一個 marker 回到起點。
   const duration=Math.min(45000,Math.max(12000,total/45*1000));
-  const start=performance.now();
+  let start=performance.now();
 
   function frame(now){
     if(token!==routeAnimationToken||!routeMotorcycleMarker)return;
@@ -946,19 +1005,26 @@ function startRouteMotorcycleAnimation(coords){
 
     const bearing=routeBearing([a.lat,a.lng],[b.lat,b.lng]);
     const el=routeMotorcycleMarker.getElement()?.querySelector("span");
-    // Emoji 🏍️ 的視覺朝向與 Leaflet bearing 基準不同，固定順時針修正 90°。
     if(el)el.style.transform="rotate("+(bearing+90)+"deg)";
 
     if(progress<1){
       routeAnimationFrame=requestAnimationFrame(frame);
-    }else{
-      routeAnimationFrame=null;
-      routeMotorcycleMarker.setLatLng([points[points.length-1].lat,points[points.length-1].lng]);
+      return;
     }
+
+    routeAnimationFrame=null;
+    routeMotorcycleMarker.setLatLng([points[points.length-1].lat,points[points.length-1].lng]);
+
+    routeAnimationRestartTimer=setTimeout(()=>{
+      routeAnimationRestartTimer=null;
+      if(token!==routeAnimationToken||!routeMotorcycleMarker)return;
+      routeMotorcycleMarker.setLatLng([points[0].lat,points[0].lng]);
+      start=performance.now();
+      routeAnimationFrame=requestAnimationFrame(frame);
+    },5000);
   }
   routeAnimationFrame=requestAnimationFrame(frame);
 }
-
 function weatherMarkerStyle(r){
   const riding=r?.riding||ridingCondition(r);
   const level=riding?.level||"normal";
@@ -1211,7 +1277,7 @@ async function loadWeather(){
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
     loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();
     lazyLoadTaiwanMap();
-    $("#updatedAt").textContent=new Date().toLocaleString("zh-TW",{hour12:false});
+    $("#updatedAt").textContent=formatTaiwanDateTime(new Date());
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
     statusEl.textContent="取得成功 ✓";
     statusEl.classList.add("is-success");
@@ -1249,5 +1315,6 @@ $("#forecastDateSelect").addEventListener("change",e=>{
   refreshSelectedDateView();
 });
 $("#analyzeRouteBtn").addEventListener("click",analyzeRoute);
+$("#clearRouteBtn").addEventListener("click",clearRoute);
 document.addEventListener("click",e=>{if(!e.target.closest(".search-field"))$("#suggestions").classList.add("hidden")});
 window.addEventListener("load",loadWeather);
