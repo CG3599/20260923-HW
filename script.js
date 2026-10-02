@@ -1,5 +1,5 @@
 const API_URL="/api/weather";
-const state={rows:[],selectedCity:"",selectedTown:"",selectedDate:"",forecastDates:[],defaultLocations:[],suggestionItems:[],suggestionIndex:-1};
+const state={rows:[],selectedCity:"",selectedTown:"",selectedDate:"",routeDate:"",forecastDates:[],defaultLocations:[],suggestionItems:[],suggestionIndex:-1};
 const DEFAULT_KEY="weatherDefaultLocations";
 let cartoBasemapKey=(window.__CARTO_CONFIG__&&window.__CARTO_CONFIG__.key)||"";
 function loadCartoBasemapKey(){
@@ -382,7 +382,10 @@ function cities(){return [...new Set(state.rows.map(r=>r.city))]}
 function towns(city){return state.rows.filter(r=>r.city===city).sort((a,b)=>a.town.localeCompare(b.town,"zh-Hant"))}
 function cityRepresentative(city){const rs=towns(city);return rs[0]||null}
 function routeOptionValue(r){return r.city+"||"+r.town}
-function findRouteRow(value){const [city,town]=String(value||"").split("||");return state.rows.find(r=>r.city===city&&r.town===town)||null}
+function routeDateValue(){const dates=availableForecastDates();if(!dates.length)return todayTaiwan();if(!state.routeDate||!dates.includes(state.routeDate))state.routeDate=dates.includes(todayTaiwan())?todayTaiwan():dates[0];return state.routeDate;}
+function routeWeatherRow(r){return rowForDate(r,routeDateValue())||r;}
+function findRouteRow(value){const [city,town]=String(value||"").split("||");const base=state.rows.find(r=>r.city===city&&r.town===town)||null;return base?routeWeatherRow(base):null;}
+function populateRouteDateSelect(){const sel=$("#routeDateSelect");if(!sel)return;const dates=availableForecastDates();state.routeDate=dates.includes(state.routeDate)?state.routeDate:(dates.includes(todayTaiwan())?todayTaiwan():(dates[0]||""));sel.innerHTML=dates.map(key=>'<option value="'+key+'">'+formatForecastDate(key)+(key===todayTaiwan()?" · 今天":"")+'</option>').join("");sel.value=state.routeDate;}
 function populateRouteSelects(){
   const options=state.rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)).slice().sort((a,b)=>(a.city+a.town).localeCompare(b.city+b.town,"zh-Hant"));
   const html='<option value="">請選擇地點</option>'+options.map(r=>'<option value="'+routeOptionValue(r).replaceAll('"','&quot;')+'">'+r.city+"｜"+r.town+"</option>").join("");
@@ -581,13 +584,13 @@ function loadRouteHistory(){try{const x=JSON.parse(localStorage.getItem(ROUTE_HI
 function renderRouteHistory(){
   const box=$("#routeHistoryList");if(!box)return;const history=loadRouteHistory();
   if(!history.length){box.innerHTML='<div class="route-history-empty">尚無歷史路線查詢。</div>';return;}
-  box.innerHTML=history.map((h,i)=>{const f=h.from||{},t=h.to||{},d=h.time?new Date(h.time):null;const tm=d&&!Number.isNaN(d.getTime())?formatTaiwanDateTime(d):"--";return '<button type="button" class="route-history-item" data-history-index="'+i+'"><div><div class="route-history-route">'+(f.city||"--")+"｜"+(f.town||"--")+" → "+(t.city||"--")+"｜"+(t.town||"--")+'</div><span class="route-history-time">'+tm+'</span></div><span class="route-history-arrow">›</span></button>';}).join("");
+  box.innerHTML=history.map((h,i)=>{const f=h.from||{},t=h.to||{},d=h.time?new Date(h.time):null;const tm=d&&!Number.isNaN(d.getTime())?formatTaiwanDateTime(d):"--";const dateLabel=h.date?formatForecastDate(h.date):"當日";return '<button type="button" class="route-history-item" data-history-index="'+i+'"><div><div class="route-history-route">'+(f.city||"--")+"｜"+(f.town||"--")+" → "+(t.city||"--")+"｜"+(t.town||"--")+'</div><span class="route-history-time">'+tm+'</span></div><span class="route-history-arrow">›</span></button>';}).join("");
   box.querySelectorAll(".route-history-item").forEach(btn=>btn.addEventListener("click",()=>{const h=history[Number(btn.dataset.historyIndex)];if(!h)return;const f=findRouteRow((h.from?.city||"")+"||"+(h.from?.town||"")),t=findRouteRow((h.to?.city||"")+"||"+(h.to?.town||""));if(f)setRouteLocation("from",f);if(t)setRouteLocation("to",t);}));
 }
 function saveRouteHistoryItem(from,to){
-  const key=from.city+"||"+from.town+"=>"+to.city+"||"+to.town;
-  const history=loadRouteHistory().filter(h=>(h.from?.city+"||"+h.from?.town+"=>"+h.to?.city+"||"+h.to?.town)!==key);
-  history.unshift({from:{city:from.city,town:from.town},to:{city:to.city,town:to.town},time:Date.now()});
+  const date=routeDateValue();const key=from.city+"||"+from.town+"=>"+to.city+"||"+to.town+"=>"+date;
+  const history=loadRouteHistory().filter(h=>(h.from?.city+"||"+h.from?.town+"=>"+h.to?.city+"||"+h.to?.town+"=>"+(h.date||todayTaiwan()))!==key);
+  history.unshift({from:{city:from.city,town:from.town},to:{city:to.city,town:to.town},date,time:Date.now()});
   try{localStorage.setItem(ROUTE_HISTORY_KEY,JSON.stringify(history.slice(0,10)));}catch(_){}
   renderRouteHistory();
 }
@@ -875,6 +878,7 @@ function renderThreeDayForecast(container,r){
 function bindForecastCollapse(details){
   if(!details)return;
   details.addEventListener("toggle",()=>{
+    if(details.open)document.querySelectorAll(".three-day-collapse[open]").forEach(other=>{if(other!==details)other.open=false;});
     const card=details.closest(".weather-card");
     if(!card)return;
     card.classList.toggle("forecast-expanded",details.open);
@@ -916,7 +920,7 @@ function renderRows(rows,showAll=false){
     decisionPanel.className="decision-panel decision-"+decision.action.toLowerCase();
     n.querySelector(".decision-action").textContent=decision.actionIcon+" "+decision.actionLabel;
     n.querySelector(".decision-evidence").textContent=decision.evidence.join("、");
-    n.querySelector(".forecast-time").textContent=r.start?"預報時間："+new Date(r.start).toLocaleString("zh-TW",{hour12:false}):"預報時間：--";
+    n.querySelector(".forecast-time").textContent=r.start?"預報時間："+formatTaiwanDateTime(r.start):"預報時間：--";
     renderThreeDayForecast(n.querySelector(".three-day-forecast"),r);
     bindForecastCollapse(n.querySelector(".three-day-collapse"));
     const defaultLocation=state.defaultLocations.some(d=>d.city===r.city&&d.town===r.town);
@@ -999,61 +1003,35 @@ function routeBearing(a,b){
 function startRouteMotorcycleAnimation(coords){
   clearRouteMotorcycleAnimation();
   if(!taiwanMap||!Array.isArray(coords)||coords.length<2)return;
-  const token=routeAnimationToken;
-  const points=[];
-  let total=0;
-  for(let i=0;i<coords.length;i++){
-    if(i>0)total+=routeDistance(coords[i-1],coords[i]);
-    points.push({lat:coords[i][0],lng:coords[i][1],distance:total});
-  }
+  const token=routeAnimationToken,points=[];let total=0;
+  for(let i=0;i<coords.length;i++){if(i>0)total+=routeDistance(coords[i-1],coords[i]);points.push({lat:coords[i][0],lng:coords[i][1],distance:total});}
   if(total<=0)return;
-
-  const icon=L.divIcon({
-    className:"route-motorcycle-marker",
-    html:"<span>🏍️</span>",
-    iconSize:[34,34],
-    iconAnchor:[17,17]
-  });
-  routeMotorcycleMarker=L.marker([points[0].lat,points[0].lng],{
-    icon,zIndexOffset:1000,interactive:false
-  }).addTo(taiwanMap);
-
-  // 約 45 m/s；抵達終點後停留 5 秒，再重用同一個 marker 回到起點。
-  const duration=Math.min(45000,Math.max(12000,total/45*1000));
-  let start=performance.now();
-
+  const icon=L.divIcon({className:"route-motorcycle-marker",html:"<span>🏍️</span>",iconSize:[34,34],iconAnchor:[17,17]});
+  routeMotorcycleMarker=L.marker([points[0].lat,points[0].lng],{icon,zIndexOffset:1000,interactive:false}).addTo(taiwanMap);
+  const duration=Math.min(30000,Math.max(7000,total/90*1000));
+  let start=performance.now(),phase="forward";
+  function setPoint(target){
+    let i=1;while(i<points.length&&points[i].distance<target)i++;if(i>=points.length)i=points.length-1;
+    const a=points[i-1],b=points[i],span=Math.max(1,b.distance-a.distance),local=Math.min(1,Math.max(0,(target-a.distance)/span));
+    routeMotorcycleMarker.setLatLng([a.lat+(b.lat-a.lat)*local,a.lng+(b.lng-a.lng)*local]);
+    const bearing=routeBearing([a.lat,a.lng],[b.lat,b.lng]),el=routeMotorcycleMarker.getElement()?.querySelector("span");
+    if(el)el.style.transform="rotate("+(bearing+90)+"deg)";
+  }
+  function flyBack(now){
+    const progress=Math.min(1,(now-start)/1200),eased=progress<.5?2*progress*progress:1-Math.pow(-2*progress+2,2)/2;
+    const end=points[points.length-1],first=points[0];
+    routeMotorcycleMarker.setLatLng([end.lat+(first.lat-end.lat)*eased,end.lng+(first.lng-end.lng)*eased]);
+    const el=routeMotorcycleMarker.getElement()?.querySelector("span");if(el)el.style.transform="rotate(-90deg) scale("+(1+0.08*Math.sin(progress*Math.PI))+")";
+    if(progress<1){routeAnimationFrame=requestAnimationFrame(flyBack);return;}
+    routeAnimationFrame=null;routeMotorcycleMarker.setLatLng([first.lat,first.lng]);phase="forward";start=performance.now();routeAnimationFrame=requestAnimationFrame(frame);
+  }
   function frame(now){
     if(token!==routeAnimationToken||!routeMotorcycleMarker)return;
-    const progress=Math.min(1,(now-start)/duration);
-    const target=total*progress;
-    let i=1;
-    while(i<points.length&&points[i].distance<target)i++;
-    if(i>=points.length)i=points.length-1;
-    const a=points[i-1],b=points[i],span=Math.max(1,b.distance-a.distance);
-    const local=Math.min(1,Math.max(0,(target-a.distance)/span));
-    const lat=a.lat+(b.lat-a.lat)*local;
-    const lng=a.lng+(b.lng-a.lng)*local;
-    routeMotorcycleMarker.setLatLng([lat,lng]);
-
-    const bearing=routeBearing([a.lat,a.lng],[b.lat,b.lng]);
-    const el=routeMotorcycleMarker.getElement()?.querySelector("span");
-    if(el)el.style.transform="rotate("+(bearing+90)+"deg)";
-
-    if(progress<1){
-      routeAnimationFrame=requestAnimationFrame(frame);
-      return;
-    }
-
-    routeAnimationFrame=null;
-    routeMotorcycleMarker.setLatLng([points[points.length-1].lat,points[points.length-1].lng]);
-
-    routeAnimationRestartTimer=setTimeout(()=>{
-      routeAnimationRestartTimer=null;
-      if(token!==routeAnimationToken||!routeMotorcycleMarker)return;
-      routeMotorcycleMarker.setLatLng([points[0].lat,points[0].lng]);
-      start=performance.now();
-      routeAnimationFrame=requestAnimationFrame(frame);
-    },5000);
+    if(phase==="return"){flyBack(now);return;}
+    const progress=Math.min(1,(now-start)/duration);setPoint(total*progress);
+    if(progress<1){routeAnimationFrame=requestAnimationFrame(frame);return;}
+    routeAnimationFrame=null;setPoint(total);
+    routeAnimationRestartTimer=setTimeout(()=>{routeAnimationRestartTimer=null;if(token!==routeAnimationToken||!routeMotorcycleMarker)return;phase="return";start=performance.now();routeAnimationFrame=requestAnimationFrame(frame);},5000);
   }
   routeAnimationFrame=requestAnimationFrame(frame);
 }
@@ -1307,8 +1285,9 @@ async function loadWeather(){
       });
     }
     populateForecastDateSelect();
+    populateRouteDateSelect();
     if(!state.rows.length)throw new Error("API 有回應，但沒有可顯示的預報資料。");
-    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();
+    loadDefaults();ensureDefaults();summary();renderDefaultCards();populateRouteSelects();populateRouteDateSelect();
     lazyLoadTaiwanMap();
     $("#updatedAt").textContent=formatTaiwanDateTime(new Date());
     status("資料取得成功","目前取得 "+state.rows.length+" 筆鄉鎮資料，可搜尋縣市或鄉鎮。");
@@ -1347,6 +1326,7 @@ $("#forecastDateSelect").addEventListener("change",e=>{
   state.selectedDate=e.target.value||todayTaiwan();
   refreshSelectedDateView();
 });
+$("#routeDateSelect").addEventListener("change",e=>{state.routeDate=e.target.value||todayTaiwan();if(activeRouteEndpoints)analyzeRoute();});
 $("#analyzeRouteBtn").addEventListener("click",analyzeRoute);
 $("#clearRouteBtn").addEventListener("click",clearRoute);
 renderRouteHistory();
