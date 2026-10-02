@@ -776,7 +776,8 @@ async function requestSegmentedRoute(from,to,mode){
       const raw=[from,...routeIntermediatePoints(from,to,count),to];
       const snapped=[];
       let failed=false;
-      for(const p of raw){
+      for(let pointIndex=0;pointIndex<raw.length;pointIndex++){
+        const p=raw[pointIndex];
         const loc=await snapPointNonNational(root,p,{context:"segmented-snap",segment:pointIndex+" / "+(raw.length-1),mode});
         if(!loc){failed=true;break;}
         snapped.push(loc[0]+","+loc[1]);
