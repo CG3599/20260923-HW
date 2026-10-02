@@ -1428,7 +1428,7 @@ async function renderTaiwanMap(){
     const marker=L.circleMarker([r.latitude,r.longitude],{
       radius:s.radius,fillColor:s.fillColor,color:s.color,weight:1.5,fillOpacity:.82
     }).addTo(taiwanMap);
-    marker.bindPopup('<div class="weather-popup"><h4>'+r.city+"｜"+r.town+'</h4><div class="weather-temp">'+fmt(r.temperature," °C")+'</div><p>💧 濕度：'+fmt(r.humidity," %")+'</p><p>🌧️ 降雨機率：'+fmt(r.pop," %")+'</p><p>💨 風向：'+(r.windDirection||"--")+'</p><p>💨 風速：'+fmt(r.windSpeed," m/s")+'</p><p><strong>🏍️ 騎乘條件：'+(riding.icon||"")+" "+(riding.label||"--")+'</strong></p><p>評分：'+(Number.isFinite(riding.score)?riding.score:"--")+'</p><p>☔ 雨具建議：'+(riding.rainGear||"--")+'</p><p class="popup-muted">'+(riding.reasons?.length?"主要因素："+riding.reasons.join("、")+"<br>":"")+(riding.advice||"")+'</p></div>');
+    marker.bindPopup(routeEndpointPopupHTML(r,icon(r.weather),"縣市標記"),{maxWidth:380,minWidth:300,className:"route-weather-popup"});
     weatherMarkers.push(marker);
   });
   if(defaults.length){
