@@ -733,27 +733,33 @@ function isNationalWaypoint(w){
     /(?:^|\s)(?:國\s*)?(?:1|2|3|4|5|6|7|8|9|10)\s*號?(?:高速公路|國道)(?:\s|$)/.test(text);
 }
 async function snapPointNonNational(root,r,diagnostic={}){
-  const probePoints=[
+  const probes=[
     {latitude:r.latitude,longitude:r.longitude,offset:0},
-    {latitude:r.latitude+0.004,longitude:r.longitude,offset:"+N4"},
-    {latitude:r.latitude-0.004,longitude:r.longitude,offset:"-N4"},
-    {latitude:r.latitude,longitude:r.longitude+0.004,offset:"+E4"},
-    {latitude:r.latitude,longitude:r.longitude-0.004,offset:"-E4"},
-    {latitude:r.latitude+0.008,longitude:r.longitude,offset:"+N8"},
-    {latitude:r.latitude-0.008,longitude:r.longitude,offset:"-N8"},
-    {latitude:r.latitude,longitude:r.longitude+0.008,offset:"+E8"},
-    {latitude:r.latitude,longitude:r.longitude-0.008,offset:"-E8"}
+    {latitude:r.latitude+0.003,longitude:r.longitude,offset:"+N3"},
+    {latitude:r.latitude-0.003,longitude:r.longitude,offset:"-N3"},
+    {latitude:r.latitude,longitude:r.longitude+0.003,offset:"+E3"},
+    {latitude:r.latitude,longitude:r.longitude-0.003,offset:"-E3"}
   ];
-  for(const probe of probePoints){
-    const candidates=await requestOsrmNearestCandidates(root,probe.latitude,probe.longitude,10000,{
+  const bases=[root];
+  const alternate=root.includes("router.project-osrm.org")
+    ?"https://routing.openstreetmap.de/routed-car/"
+    :"https://router.project-osrm.org/";
+  if(!bases.includes(alternate))bases.push(alternate);
+
+  for(const probe of probes){
+    const results=await Promise.all(bases.map(base=>requestOsrmNearestCandidates(base,probe.latitude,probe.longitude,7000,{
       ...diagnostic,
-      context:diagnostic.context||"non-national-snap"
-    });
-    const usable=candidates.filter(w=>w?.location&&!isNationalWaypoint(w));
+      context:diagnostic.context||"non-national-snap",
+      probe:probe.offset
+    })));
+    const candidates=results.flat();
+    const usable=candidates
+      .filter(w=>w?.location&&!isNationalWaypoint(w))
+      .sort((a,b)=>Number(a?.distance||Infinity)-Number(b?.distance||Infinity));
     const chosen=usable[0]||null;
     routeDiagnosticEntry({
       kind:"snap",
-      provider:root,
+      provider:"multi-provider",
       context:diagnostic.context||"unknown",
       segment:diagnostic.segment??null,
       probe:probe.offset,
@@ -821,30 +827,43 @@ async function requestCorridorRoute(from,to,root){
 async function resolveCorridorAnchors(root,from,to,mode){
   const corridor=await requestCorridorRoute(from,to,root);
   if(!corridor)return null;
-  const corridorPoints=sampleRouteCorridor(corridor,mode==="expressway"?22000:18000);
+  const corridorPoints=sampleRouteCorridor(corridor,mode==="expressway"?50000:45000);
   if(corridorPoints.length<2)return null;
-  const anchors=[];
-  const startLocation=await snapPointNonNational(root,from,{context:"corridor-endpoint-start",segment:"start",mode});
-  const endLocation=await snapPointNonNational(root,to,{context:"corridor-endpoint-end",segment:"end",mode});
+
+  const startLocation=await snapPointNonNational(root,from,{
+    context:"corridor-endpoint-start",segment:"start",mode
+  });
+  const endLocation=await snapPointNonNational(root,to,{
+    context:"corridor-endpoint-end",segment:"end",mode
+  });
   if(!startLocation||!endLocation)return null;
-  anchors.push({location:startLocation,key:startLocation[0].toFixed(5)+","+startLocation[1].toFixed(5),index:0});
+
+  const anchors=[
+    {location:startLocation,key:startLocation[0].toFixed(5)+","+startLocation[1].toFixed(5),index:0}
+  ];
+
   for(let i=1;i<corridorPoints.length-1;i++){
     const point=corridorPoints[i];
-    const location=await snapPointNonNational(root,point,{
-      context:"corridor-snap",
-      segment:i+" / "+(corridorPoints.length-1),
-      mode
-    });
-    if(!location)continue;
-    const key=location[0].toFixed(5)+","+location[1].toFixed(5);
+    const key=point.longitude.toFixed(5)+","+point.latitude.toFixed(5);
     if(anchors.some(anchor=>anchor.key===key))continue;
-    anchors.push({location,key,index:i});
+    anchors.push({
+      location:[point.longitude,point.latitude],
+      key,
+      index:i
+    });
   }
+
   const endKey=endLocation[0].toFixed(5)+","+endLocation[1].toFixed(5);
-  if(!anchors.some(anchor=>anchor.key===endKey))anchors.push({location:endLocation,key:endKey,index:corridorPoints.length-1});
+  if(!anchors.some(anchor=>anchor.key===endKey)){
+    anchors.push({
+      location:endLocation,
+      key:endKey,
+      index:corridorPoints.length-1
+    });
+  }
   anchors.sort((a,b)=>a.index-b.index);
+
   if(anchors.length<2)return null;
-  const startAnchor=anchors[0],endAnchor=anchors[anchors.length-1];
   routeDiagnosticEntry({
     kind:"corridor",
     provider:root,
@@ -852,15 +871,14 @@ async function resolveCorridorAnchors(root,from,to,mode){
     mode,
     sourcePointCount:corridorPoints.length,
     anchorCount:anchors.length,
-    start:startAnchor.location,
-    end:endAnchor.location
+    start:anchors[0].location,
+    end:anchors[anchors.length-1].location
   });
   return {corridor,anchors};
 }
 async function requestOsrmTierCandidates(coords){
   const bases=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
   const queries=[
-    "?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway",
     "?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&annotations=true"
   ];
   const all=[],seen=new Set();
@@ -886,7 +904,7 @@ async function requestSegmentedRoute(from,to,mode){
     let failed=false;
     for(let i=0;i<anchors.length-1;i++){
       const a=anchors[i].location,b=anchors[i+1].location;
-      const q="?overview=full&geometries=geojson&steps=true&alternatives=5&continue_straight=false&annotations=true";
+      const q="?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&annotations=true";
       const routes=await requestOsrmRoutes(
         root+"route/v1/driving/"+a[0]+","+a[1]+";"+b[0]+","+b[1],
         q,20000,
@@ -935,6 +953,96 @@ async function requestSegmentedRoute(from,to,mode){
     }
   }
   return null;
+}
+function decodePolyline6(str){
+  let index=0,lat=0,lng=0,out=[];
+  while(index<str.length){
+    let result=0,shift=0,b;
+    do{b=str.charCodeAt(index++)-63;result|=(b&31)<<shift;shift+=5;}while(b>=32);
+    lat+=result&1?~(result>>1):result>>1;
+    result=0;shift=0;
+    do{b=str.charCodeAt(index++)-63;result|=(b&31)<<shift;shift+=5;}while(b>=32);
+    lng+=result&1?~(result>>1):result>>1;
+    out.push([lat/1e6,lng/1e6]);
+  }
+  return out;
+}
+async function requestValhallaFlatRoute(from,to,waypoints=[]){
+  const locations=[from,...waypoints,to].map(r=>({lat:r.latitude,lon:r.longitude,type:"break"}));
+  const payload={
+    locations,
+    costing:"motorcycle",
+    costing_options:{motorcycle:{use_highways:0,use_trails:0}},
+    units:"kilometers",
+    directions_options:{units:"kilometers"}
+  };
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
+  try{
+    const res=await fetch("https://valhalla1.openstreetmap.de/route",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Client-Id":"ridesky-weather"},
+      body:JSON.stringify(payload),
+      signal:controller.signal
+    });
+    const data=await res.json().catch(()=>null),trip=data?.trip;
+    if(!res.ok||!trip?.legs?.length)return null;
+    const coords=[],steps=[];
+    for(const leg of trip.legs){
+      if(leg.shape){
+        const part=decodePolyline6(leg.shape);
+        if(part.length)coords.push(...(coords.length?part.slice(1):part));
+      }
+      for(const m of leg.maneuvers||[]){
+        steps.push({
+          name:(m.street_names||[]).map(x=>x.value||x.text||String(x)).join(" "),
+          ref:"",
+          destinations:[m.verbal_pre_transition_instruction,m.verbal_post_transition_instruction].filter(Boolean).join(" ")
+        });
+      }
+    }
+    if(coords.length<2)return null;
+    const summary=trip.summary||{};
+    return {
+      distance:Number(summary.length||0)*1000,
+      duration:Number(summary.time||0),
+      geometry:{type:"LineString",coordinates:coords.map(p=>[p[1],p[0]])},
+      legs:[{steps}]
+    };
+  }catch(_){
+    return null;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+function renderRouteDiagnostics(errorMessage){
+  const box=$("#routeResult");
+  if(!box)return;
+  const rows=routeDiagnostics.map((d,i)=>{
+    const provider=d.provider?.replace(/^https?:\/\//,"").replace(/\/$/,"")||"--";
+    if(d.kind==="osrm"){
+      const routeText=d.routes?.length
+        ?d.routes.map((r,j)=>"候選 "+(j+1)+"："+Math.round(r.distance||0)+"m / "+Math.round(r.duration||0)+"s / "+(r.road?.hasExpressway?"快速道路":"一般道路")+(r.road?.hasNational?" / 含國道":" / 無國道")).join("； ")
+        :"沒有可用 route";
+      return "<details class=\"route-debug-item\""+(i===0?" open":"")+"><summary>"+d.context+" · "+provider+" · segment "+(d.segment??"--")+" · HTTP "+(d.status??"--")+" · "+(d.code||"no route")+"</summary><div class=\"route-debug-body\">"+routeText+(d.error?"<br>錯誤："+d.error:"")+"</div></details>";
+    }
+    if(d.kind==="nearest"){
+      return "";
+    }
+    if(d.kind==="snap"){
+      const input=d.input||{};
+      const chosen=d.chosen?((d.chosen.ref||"--")+" "+d.chosen.name+" @ "+(d.chosen.location||[]).join(", ")):"❌ 沒有可用非國道道路";
+      return "<details class=\"route-debug-item\"><summary>snap · "+d.context+" · "+(d.probe||"0")+" · segment "+(d.segment??"--")+"</summary><div class=\"route-debug-body\">輸入："+Number(input.latitude||0).toFixed(5)+", "+Number(input.longitude||0).toFixed(5)+"<br>候選："+(d.candidateCount||0)+"；非國道："+(d.usableCount||0)+"<br>選擇："+chosen+"</div></details>";
+    }
+    if(d.kind==="segment-failure"){
+      return "<details class=\"route-debug-item\"><summary>segment-failure · "+d.mode+" · segment "+d.segment+"</summary><div class=\"route-debug-body\">"+d.reason+"</div></details>";
+    }
+    if(d.kind==="corridor"){
+      return "<details class=\"route-debug-item\"><summary>corridor · "+d.mode+" · anchors "+d.anchorCount+"</summary><div class=\"route-debug-body\">來源道路點："+d.sourcePointCount+"；起點："+(d.start||[]).join(", ")+"；終點："+(d.end||[]).join(", ")+"</div></details>";
+    }
+    return "";
+  }).join("");
+  box.className="route-result route-debug";
+  box.innerHTML="<strong>路線分析失敗</strong><p class=\"route-hint\">"+String(errorMessage||"未知錯誤")+"</p><div class=\"route-debug-title\">OSRM 實際診斷</div>"+(rows||"<p>尚無 OSRM 診斷資料。</p>");
 }
 async function analyzeRoute(){
   resetRouteDiagnostics();
