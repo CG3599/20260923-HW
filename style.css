@@ -496,3 +496,32 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
 @media(prefers-reduced-motion:reduce){
   .route-motorcycle-marker span{transition:none}
 }
+
+.route-date-field{margin-top:12px;position:relative}
+.route-date-field label{display:block;margin-bottom:6px;font-size:.82rem;color:#94a3b8;font-weight:700}
+.route-date-field select{width:100%;appearance:none;padding:11px 40px 11px 12px;border-radius:12px;border:1px solid rgba(148,163,184,.22);background:linear-gradient(135deg,#111a30,#17213a);color:#e2e8f0;font-weight:700;cursor:pointer}
+.route-date-field:after{content:"⌄";position:absolute;right:14px;bottom:10px;color:#7dd3fc;font-size:1.1rem;pointer-events:none}
+.route-date-field select:focus{border-color:#7dd3fc;box-shadow:0 0 0 3px #7dd3fc18;outline:none}
+.rain-gear-advice{align-items:flex-start!important;flex-wrap:wrap!important}
+.rain-gear-advice span{flex:0 0 auto}
+.rain-gear-advice strong{max-width:100%;text-align:right;line-height:1.45;overflow-wrap:anywhere}
+.rain-gear-value{display:inline-block;white-space:normal}
+@media(max-width:560px){
+  .rain-gear-advice{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);align-items:start!important}
+  .rain-gear-advice strong{text-align:right;font-size:.74rem}
+}
+.weekly-panel{margin-left:20px;margin-right:20px}
+.forecast-day-list{grid-template-columns:repeat(7,minmax(136px,1fr));overflow-x:visible}
+.forecast-day-list .three-day-item{min-width:136px}
+@media(max-width:900px){
+  .forecast-day-list{grid-template-columns:repeat(7,minmax(132px,1fr));overflow-x:auto}
+  .forecast-day-list .three-day-item{min-width:132px}
+}
+@media(max-width:700px){
+  .weekly-panel{margin-left:16px;margin-right:16px}
+}
+@media(max-width:560px){
+  .weekly-panel{margin-left:0;margin-right:0}
+  .forecast-day-list{grid-template-columns:repeat(7,minmax(128px,1fr))}
+  .forecast-day-list .three-day-item{min-width:128px}
+}
