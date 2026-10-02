@@ -763,7 +763,6 @@ async function analyzeRoute(){
     // 第一層：國道永遠禁止。先取得所有可驗證的非 motorway 候選。
     let candidates=await requestOsrmTierCandidates(direct);
     let express=candidates.filter(r=>routeRoadTier(r)===2);
-    let flat=candidates.filter(r=>routeRoadTier(r)===1);
     let routingMode="國道禁止";
 
     // 第二層：只要有快速道路候選，就只在快速道路層選擇。
