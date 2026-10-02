@@ -194,7 +194,7 @@ function classifyRainRisk(pop,weather){
   let rainGear="不需特別準備";
   if(riskLevel>=4)rainGear="強烈建議攜帶";
   else if(riskLevel>=2)rainGear="建議攜帶";
-  else if(riskLevel===1)rainGear="可考慮攜帶";
+  else if(riskLevel===1)rainGear=(weatherLevel>=1||popLevel>=1)?"建議攜帶":"可考慮攜帶";
   return {riskLevel,penalty,rainRisk,rainGear,weatherLevel,popLevel};
 }
 
