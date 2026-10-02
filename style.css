@@ -525,3 +525,11 @@ footer{padding:18px 24px 35px;display:flex;justify-content:space-between;color:#
   .forecast-day-list{grid-template-columns:repeat(7,minmax(128px,1fr))}
   .forecast-day-list .three-day-item{min-width:128px}
 }
+
+/* Final weekly layout refinement */
+.forecast-day-list{grid-template-columns:repeat(7,minmax(0,1fr));overflow-x:visible}
+.forecast-day-list .three-day-item{min-width:0}
+@media(max-width:900px){
+  .forecast-day-list{grid-template-columns:repeat(7,minmax(128px,1fr));overflow-x:auto}
+  .forecast-day-list .three-day-item{min-width:128px}
+}
