@@ -527,7 +527,7 @@ function routePolicyLabel(route){
   const nationalBlocked=routeHasForbiddenNationalMain(route);
   return nationalBlocked
     ? "⚠️ 路線仍包含國道主線"
-    : "🚫 已啟用：避開國道主線（國道甲線保留）";
+    : "🚫 已啟用：禁止國道主線・快速道路可使用";
 }
 function haversineKm(a,b){
   const R=6371;
@@ -674,6 +674,37 @@ async function requestRouteFromServers(coords,options=""){
   }
   return [];
 }
+async function requestAllowedRoadCandidates(coords){
+  // RideSky 路線規則：只禁止國道主線（motorway），快速道路（例如台61）
+  // 不應被當成國道而排除。除了 motorway exclusion 查詢外，再取得一般
+  // alternatives，讓 OSRM 有機會提供 trunk/快速道路候選，再由國道檢查器篩掉國道。
+  const bases=[
+    "https://router.project-osrm.org/",
+    "https://routing.openstreetmap.de/routed-car/"
+  ];
+  const queries=[
+    "?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway",
+    "?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false"
+  ];
+  const all=[];
+  const seen=new Set();
+  for(const root of bases){
+    for(const query of queries){
+      const routes=await requestOsrmRoutes(root+"route/v1/driving/"+coords,query,22000);
+      for(const route of routes){
+        if(routeHasForbiddenNationalMain(route))continue;
+        const key=(route.geometry?.coordinates||[]).slice(0,3).map(p=>p.join(",")).join("|")+"|"+String(Math.round(Number(route.distance||0)))+"|"+String(Math.round(Number(route.duration||0)));
+        if(seen.has(key))continue;
+        seen.add(key);
+        all.push(route);
+      }
+      // 每個服務拿到足夠候選後即可進下一服務，避免不必要的重複請求。
+      if(all.length>=6)break;
+    }
+    if(all.length>=6)break;
+  }
+  return all;
+}
 async function requestSnappedAvoidMotorway(from,waypoints,to){
   const roots=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
   const raw=[from,...waypoints,...[to]];
@@ -765,10 +796,12 @@ async function analyzeRoute(){
     const connected=await requestRouteFromServers(direct,"?overview=false&geometries=geojson&steps=true&alternatives=1");
     if(!connected.length)throw new Error("起點與終點目前無法由路由服務建立道路連通；請稍後再試。");
 
-    // 第二階段：直接要求避開 motorway。若服務能直接找到，優先採用。
-    let valid=(await requestRouteFromServers(direct,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway"))
-      .filter(route=>!routeHasForbiddenNationalMain(route));
-    let routingMode="快速道路優先";
+    // 第二階段：建立「國道禁止、快速道路允許」的候選集合。
+    // 同時查詢 exclude=motorway 與一般 alternatives；後者不是放行國道，
+    // 而是讓 OSRM 有機會把台61等 trunk/快速道路納入候選，再由國道檢查器
+    // 明確剔除國道主線。
+    let valid=await requestAllowedRoadCandidates(direct);
+    let routingMode="國道禁止／快速道路允許";
 
     // 第三階段：不要把「鄉鎮中心點」直接當成途經點；先用 nearest API 把導引點吸附到真正可行車道路，再重新規劃。
     if(!valid.length){
