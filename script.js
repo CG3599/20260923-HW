@@ -824,7 +824,11 @@ async function resolveCorridorAnchors(root,from,to,mode){
   const corridorPoints=sampleRouteCorridor(corridor,mode==="expressway"?22000:18000);
   if(corridorPoints.length<2)return null;
   const anchors=[];
-  for(let i=0;i<corridorPoints.length;i++){
+  const startLocation=await snapPointNonNational(root,from,{context:"corridor-endpoint-start",segment:"start",mode});
+  const endLocation=await snapPointNonNational(root,to,{context:"corridor-endpoint-end",segment:"end",mode});
+  if(!startLocation||!endLocation)return null;
+  anchors.push({location:startLocation,key:startLocation[0].toFixed(5)+","+startLocation[1].toFixed(5),index:0});
+  for(let i=1;i<corridorPoints.length-1;i++){
     const point=corridorPoints[i];
     const location=await snapPointNonNational(root,point,{
       context:"corridor-snap",
@@ -833,9 +837,12 @@ async function resolveCorridorAnchors(root,from,to,mode){
     });
     if(!location)continue;
     const key=location[0].toFixed(5)+","+location[1].toFixed(5);
-    if(anchors.length&&!anchors[anchors.length-1].key===key)continue;
+    if(anchors.some(anchor=>anchor.key===key))continue;
     anchors.push({location,key,index:i});
   }
+  const endKey=endLocation[0].toFixed(5)+","+endLocation[1].toFixed(5);
+  if(!anchors.some(anchor=>anchor.key===endKey))anchors.push({location:endLocation,key:endKey,index:corridorPoints.length-1});
+  anchors.sort((a,b)=>a.index-b.index);
   if(anchors.length<2)return null;
   const startAnchor=anchors[0],endAnchor=anchors[anchors.length-1];
   routeDiagnosticEntry({
