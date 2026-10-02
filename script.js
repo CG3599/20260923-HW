@@ -610,13 +610,70 @@ function saveRouteHistoryItem(from,to){
   try{localStorage.setItem(ROUTE_HISTORY_KEY,JSON.stringify(history.slice(0,10)));}catch(_){}
   renderRouteHistory();
 }
-async function requestOsrmRoutes(base,query,timeoutMs=18000){
+let routeDiagnostics=[];
+function resetRouteDiagnostics(){
+  routeDiagnostics=[];
+}
+function routeDiagnosticEntry(entry){
+  routeDiagnostics.push({
+    time:new Date().toISOString(),
+    ...entry
+  });
+}
+function routeDiagnosticRoadType(route){
+  const steps=(route?.legs||[]).flatMap(leg=>leg?.steps||[]);
+  const refs=[...new Set(steps.map(s=>String(s?.ref||"").trim()).filter(Boolean))];
+  const names=[...new Set(steps.map(s=>String(s?.name||"").trim()).filter(Boolean))];
+  const classes=[...new Set(steps.map(s=>s?.road_classification||{}).flatMap(x=>Object.entries(x).filter(([,v])=>v===true).map(([k])=>k)))];
+  return {
+    tier:routeRoadTier(route),
+    hasNational:routeHasForbiddenNationalMain(route),
+    hasExpressway:routeHasExpressway(route),
+    refs:refs.slice(0,12),
+    names:names.slice(0,12),
+    classes
+  };
+}
+function routeDiagnosticRouteSummary(route){
+  return {
+    distance:Number(route?.distance||0),
+    duration:Number(route?.duration||0),
+    road:routeDiagnosticRoadType(route)
+  };
+}
+async function requestOsrmRoutes(base,query,timeoutMs=18000,diagnostic={}){
+  const started=Date.now();
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     const res=await fetch(base+query,{signal:controller.signal});
     const text=await res.text();let data=null;try{data=JSON.parse(text)}catch(_){}
-    return res.ok&&data?.code==="Ok"&&Array.isArray(data.routes)?data.routes:[];
-  }catch(_){return []}finally{clearTimeout(timer);}
+    const routes= res.ok&&data?.code==="Ok"&&Array.isArray(data.routes)?data.routes:[];
+    routeDiagnosticEntry({
+      kind:"osrm",
+      provider:base,
+      context:diagnostic.context||"unknown",
+      segment:diagnostic.segment??null,
+      status:res.status,
+      code:data?.code||null,
+      routeCount:routes.length,
+      elapsedMs:Date.now()-started,
+      routes:routes.slice(0,3).map(routeDiagnosticRouteSummary)
+    });
+    return routes;
+  }catch(error){
+    routeDiagnosticEntry({
+      kind:"osrm",
+      provider:base,
+      context:diagnostic.context||"unknown",
+      segment:diagnostic.segment??null,
+      status:null,
+      code:null,
+      routeCount:0,
+      elapsedMs:Date.now()-started,
+      error:error?.name==="AbortError"?"timeout":String(error?.message||error)
+    });
+    return [];
+  }finally{clearTimeout(timer);}
 }
 async function requestRouteFromServers(coords,options=""){
   const bases=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
@@ -626,23 +683,61 @@ async function requestRouteFromServers(coords,options=""){
   }
   return [];
 }
-async function requestOsrmNearestCandidates(base,lat,lon,timeoutMs=10000){
+async function requestOsrmNearestCandidates(base,lat,lon,timeoutMs=10000,diagnostic={}){
+  const started=Date.now();
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     const res=await fetch(base+"nearest/v1/driving/"+lon+","+lat+"?number=8",{signal:controller.signal});
     const data=await res.json().catch(()=>null);
-    return res.ok&&data?.code==="Ok"&&Array.isArray(data.waypoints)?data.waypoints:[];
-  }catch(_){return []}finally{clearTimeout(timer);}
+    const waypoints=res.ok&&data?.code==="Ok"&&Array.isArray(data.waypoints)?data.waypoints:[];
+    routeDiagnosticEntry({
+      kind:"nearest",
+      provider:base,
+      context:diagnostic.context||"unknown",
+      segment:diagnostic.segment??null,
+      status:res.status,
+      code:data?.code||null,
+      waypointCount:waypoints.length,
+      waypoints:waypoints.slice(0,8).map(w=>({name:w?.name||"",ref:w?.ref||"",location:w?.location||null,classes:w?.classes||[]})),
+      elapsedMs:Date.now()-started
+    });
+    return waypoints;
+  }catch(error){
+    routeDiagnosticEntry({
+      kind:"nearest",
+      provider:base,
+      context:diagnostic.context||"unknown",
+      segment:diagnostic.segment??null,
+      status:null,
+      code:null,
+      waypointCount:0,
+      elapsedMs:Date.now()-started,
+      error:error?.name==="AbortError"?"timeout":String(error?.message||error)
+    });
+    return [];
+  }finally{clearTimeout(timer);}
 }
 function isNationalWaypoint(w){
   const text=[w?.name,w?.ref,w?.classes].filter(Boolean).join(" ").replaceAll("臺","台");
   return /國道\s*(1|2|3|4|5|6|7|8|9|10)\s*(號|線)?/.test(text)||
     /(?:中山高速公路|福爾摩沙高速公路|北二高|二高|蔣渭水高速公路|北宜高速公路|水沙連高速公路|高速公路)/.test(text);
 }
-async function snapPointNonNational(root,r){
-  const candidates=await requestOsrmNearestCandidates(root,r.latitude,r.longitude);
+async function snapPointNonNational(root,r,diagnostic={}){
+  const candidates=await requestOsrmNearestCandidates(root,r.latitude,r.longitude,10000,diagnostic);
   const usable=candidates.filter(w=>w?.location&&!isNationalWaypoint(w));
-  return (usable[0]||null)?.location||null;
+  const chosen=usable[0]||null;
+  routeDiagnosticEntry({
+    kind:"snap",
+    provider:root,
+    context:diagnostic.context||"unknown",
+    segment:diagnostic.segment??null,
+    input:{latitude:r.latitude,longitude:r.longitude},
+    candidateCount:candidates.length,
+    usableCount:usable.length,
+    chosen:chosen?{name:chosen.name||"",ref:chosen.ref||"",location:chosen.location||null,classes:chosen.classes||[]}:null,
+    rejectedNational:candidates.filter(w=>isNationalWaypoint(w)).slice(0,8).map(w=>({name:w?.name||"",ref:w?.ref||"",classes:w?.classes||[]}))
+  });
+  return chosen?.location||null;
 }
 async function requestOsrmTierCandidates(coords){
   const bases=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
@@ -653,7 +748,7 @@ async function requestOsrmTierCandidates(coords){
   const all=[],seen=new Set();
   for(const root of bases){
     for(const q of queries){
-      const routes=await requestOsrmRoutes(root+"route/v1/driving/"+coords,q,22000);
+      const routes=await requestOsrmRoutes(root+"route/v1/driving/"+coords,q,22000,{context:"tier-candidate"});
       for(const route of routes){
         if(routeHasForbiddenNationalMain(route))continue;
         const key=(route.geometry?.coordinates||[]).slice(0,5).map(p=>p.join(",")).join("|")+"|"+Math.round(Number(route.distance||0))+"|"+Math.round(Number(route.duration||0));
@@ -682,7 +777,7 @@ async function requestSegmentedRoute(from,to,mode){
       const snapped=[];
       let failed=false;
       for(const p of raw){
-        const loc=await snapPointNonNational(root,p);
+        const loc=await snapPointNonNational(root,p,{context:"segmented-snap",segment:i+" / "+(raw.length-1),mode});
         if(!loc){failed=true;break;}
         snapped.push(loc[0]+","+loc[1]);
       }
@@ -690,7 +785,7 @@ async function requestSegmentedRoute(from,to,mode){
       const q="?overview=full&geometries=geojson&steps=true&alternatives=2&continue_straight=false&exclude=motorway";
       const parts=[];
       for(let i=0;i<snapped.length-1;i++){
-        const routes=await requestOsrmRoutes(root+"route/v1/driving/"+snapped[i]+";"+snapped[i+1],q,20000);
+        const routes=await requestOsrmRoutes(root+"route/v1/driving/"+snapped[i]+";"+snapped[i+1],q,20000,{context:"segmented-route",segment:i+" / "+(snapped.length-1),mode,from:snapped[i],to:snapped[i+1]});
         const candidates=routes.filter(r=>!routeHasForbiddenNationalMain(r));
         if(!candidates.length){failed=true;break;}
         let chosen;
@@ -749,7 +844,28 @@ function decodePolyline6(str){
   }
   return out;
 }
+function renderRouteDiagnostics(errorMessage){
+  const box=$("#routeResult");
+  if(!box)return;
+  const rows=routeDiagnostics.map((d,i)=>{
+    const provider=d.provider?.replace(/^https?:\/\//,"").replace(/\/$/,"")||"--";
+    if(d.kind==="osrm"){
+      const routeText=d.routes?.length
+        ? d.routes.map((r,j)=>"候選 "+(j+1)+"：\"+Math.round(r.distance||0)+"m / "+Math.round(r.duration||0)+"s / "+(r.road?.hasExpressway?"快速道路":"一般道路")+(r.road?.hasNational?" / 含國道":" / 無國道")).join("； ")
+        : "沒有可用 route";
+      return "<details class=\"route-debug-item\""+(i===0?" open":"")+"><summary>"+d.context+" · "+provider+" · segment "+(d.segment??"--")+" · HTTP "+(d.status??"--")+" · "+(d.code||"no route")+"</summary><div class=\"route-debug-body\">"+routeText+(d.error?"<br>錯誤："+d.error:"")+"</div></details>";
+    }
+    if(d.kind==="snap"){
+      const chosen=d.chosen?((d.chosen.ref||"--")+" "+(d.chosen.name||"")+" @ "+(d.chosen.location||[]).join(", ")):"❌ 沒有可用非國道道路";
+      return "<details class=\"route-debug-item\"><summary>snap · "+d.context+" · segment "+(d.segment??"--")+"</summary><div class=\"route-debug-body\">輸入："+d.input.latitude.toFixed(5)+", "+d.input.longitude.toFixed(5)+"<br>候選："+d.candidateCount+"；非國道："+d.usableCount+"<br>選擇："+chosen+"</div></details>";
+    }
+    return "";
+  }).join("");
+  box.className="route-result route-debug";
+  box.innerHTML="<strong>路線分析失敗</strong><p class=\"route-hint\">"+errorMessage+"</p><div class=\"route-debug-title\">OSRM 實際診斷</div>"+(rows||"<p>尚無 OSRM 診斷資料。</p>");
+}
 async function analyzeRoute(){
+  resetRouteDiagnostics();
   clearRouteMotorcycleAnimation();
   const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
   if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return;}
