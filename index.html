@@ -85,6 +85,10 @@
       <select id="routeTo" class="route-value-select hidden" aria-hidden="true"><option value="">請選擇終點</option></select>
     </div>
   </div>
+  <div class="route-date-field">
+    <label for="routeDateSelect">📅 預報日期</label>
+    <select id="routeDateSelect"><option value="">今天</option></select>
+  </div>
   <button id="analyzeRouteBtn" class="primary route-button" type="button">分析這段路的可騎行性</button>
   <div id="routeResult" class="route-result hidden"></div>
   <details class="route-history-collapse">
@@ -157,7 +161,7 @@
     <div class="decision-evidence"><span></span></div>
   </div>
   <details class="three-day-collapse">
-    <summary><span>📅 未來 7 天天氣</span><span class="forecast-expand-hint">展開查看趨勢</span></summary><p class="forecast-disclaimer">⚠️ 騎乘條件為依目前可取得資料的估算；預測日期距現在越遠，誤差可能越大，第 4–7 天請以趨勢參考為主，出發前再次確認最新預報。</p>
+    <summary><span>📅 未來 7 天天氣</span></summary><p class="forecast-disclaimer">⚠️ 騎乘條件為依目前可取得資料的估算；預測日期距現在越遠，誤差可能越大，第 4–7 天請以趨勢參考為主，出發前再次確認最新預報。</p>
     <div class="three-day-content"><div class="three-day-forecast"></div></div>
   </details>
   <div class="forecast-time"></div>
