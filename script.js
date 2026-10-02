@@ -587,13 +587,37 @@ function saveRouteHistoryItem(from,to){
   try{localStorage.setItem(ROUTE_HISTORY_KEY,JSON.stringify(history.slice(0,10)));}catch(_){}
   renderRouteHistory();
 }
+function routeEndpointPopupHTML(r,icon,label){
+  const c=r.riding||ridingCondition(r);
+  const levelClass=c.level||"normal";
+  const reasons=(c.reasons&&c.reasons.length)?c.reasons.join("、"):"目前沒有明顯不利因素";
+  const score=Number.isFinite(c.score)?c.score:"--";
+  return '<div class="route-endpoint-popup weather-card '+levelClass+'">'+
+    '<div class="card-top"><div><h3 class="city">'+r.city+'</h3><p class="town">'+r.town+'</p></div><div class="card-tools"><span class="weather-icon">'+icon+'</span></div></div>'+
+    '<div class="temperature"><span class="temp">'+fmt(r.temperature)+'</span><small>°C</small></div>'+
+    '<div class="weather-name">'+(r.weather||"資料待更新")+'</div>'+
+    '<details class="weather-details-collapse" open><summary>🌦️ 詳細天氣資訊</summary><div class="details">'+
+      '<div><span>💧 濕度</span><strong>'+fmt(r.humidity," %")+'</strong></div>'+
+      '<div><span>🌧️ 降雨機率</span><strong>'+fmt(r.pop," %")+'</strong></div>'+
+      '<div><span>💨 風向</span><strong>'+(r.windDirection||"--")+'</strong></div>'+
+      '<div><span>💨 風速</span><strong>'+fmt(r.windSpeed," m/s")+'</strong></div>'+
+    '</div></details>'+
+    '<div class="riding-panel riding-'+levelClass+'"><div class="riding-head"><span>🏍️ 騎乘條件</span><strong class="riding-level">'+(c.icon||"🟡")+" "+(c.label||"資料不足")+'</strong></div>'+
+      '<div class="riding-score-row"><div class="score-ring"><strong>'+score+'</strong><span>Score</span></div><div class="riding-meta">'+
+        '<div class="riding-reasons"><span>主要因素</span><strong>'+reasons+'</strong></div>'+
+        '<div class="riding-advice"><span>💡 騎士建議</span><p>'+(c.advice||"--")+'</p></div>'+
+        '<div class="rain-gear-advice"><span>☔ 雨具建議</span><strong class="rain-gear-value">'+(c.rainGear||"--")+'</strong></div>'+
+      '</div></div></div>'+
+    '<div class="forecast-time">預報時間：'+(r.start?formatTaiwanDateTime(r.start):"--")+'</div>'+
+  '</div>';
+}
 function renderRouteEndpoints(from,to){
   routeEndpointMarkers.forEach(m=>m.remove());routeEndpointMarkers=[];if(!taiwanMap)return;
   [[from,"📍","起點"],[to,"🏁","終點"]].forEach(([r,ico,label])=>{
     if(!r||!Number.isFinite(r.latitude)||!Number.isFinite(r.longitude))return;
     const c=r.riding||ridingCondition(r);
     const m=L.marker([r.latitude,r.longitude],{icon:L.divIcon({className:"route-endpoint-marker",html:"<span>"+ico+"</span>",iconSize:[36,36],iconAnchor:[18,18]}),zIndexOffset:1200}).addTo(taiwanMap);
-    m.bindPopup('<div class="route-endpoint-popup"><h4>'+ico+" "+label+"｜"+r.city+"｜"+r.town+'</h4><div class="endpoint-score"><strong>🏍️ '+(c.icon||"")+" "+(c.label||"資料不足")+'</strong><br>Score：'+(Number.isFinite(c.score)?c.score:"--")+' / 5</div><p>🌡️ '+fmt(r.temperature," °C")+"　💧 "+fmt(r.humidity," %")+'</p><p>🌧️ 降雨 '+fmt(r.pop," %")+"　💨 "+fmt(r.windSpeed," m/s")+'</p><p>☔ 雨具建議：'+(c.rainGear||"--")+'</p><p class="popup-muted">'+(c.reasons?.length?c.reasons.join("、")+"<br>":"")+(c.advice||"")+'</p></div>');
+    m.bindPopup(routeEndpointPopupHTML(r,ico,label),{maxWidth:380,minWidth:300,className:"route-weather-popup"});
     routeEndpointMarkers.push(m);
   });
 }
@@ -622,8 +646,8 @@ async function requestOsrmRoutes(base,query,timeoutMs=15000){
 }
 function buildDetourWaypoints(from,to){
   const a=[from.latitude,from.longitude],b=[to.latitude,to.longitude],candidates=[];
-  const dx=b[1]-a[1],dy=b[0]-a[0],len=Math.hypot(dx,dy)||1;
-  for(const ratio of [.25,.5,.75]){
+  const dx=b[1]-a[1],dy=b[0]-a[0];
+  for(const ratio of [.2,.35,.5,.65,.8]){
     const lat=a[0]+dy*ratio,lon=a[1]+dx*ratio;
     const nearby=state.rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)&&r.city!==from.city&&r.city!==to.city)
       .map(r=>({r,d:Math.hypot((r.latitude-lat)*1.1,(r.longitude-lon)*Math.cos(lat*Math.PI/180))}))
@@ -633,7 +657,7 @@ function buildDetourWaypoints(from,to){
   }
   return candidates;
 }
-async function requestOsrmRoutes(base,query,timeoutMs=15000){
+async function requestOsrmRoutes(base,query,timeoutMs=18000){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     const res=await fetch(base+query,{signal:controller.signal});
@@ -641,37 +665,90 @@ async function requestOsrmRoutes(base,query,timeoutMs=15000){
     return res.ok&&data?.code==="Ok"&&Array.isArray(data.routes)?data.routes:[];
   }catch(_){return []}finally{clearTimeout(timer);}
 }
+async function requestOsrmNearest(base,lat,lon,timeoutMs=10000){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const res=await fetch(base+"nearest/v1/driving/"+lon+","+lat+"?number=1",{signal:controller.signal});
+    const data=await res.json().catch(()=>null);
+    return res.ok&&data?.code==="Ok"&&data?.waypoints?.[0]?.location?data.waypoints[0].location:null;
+  }catch(_){return null}finally{clearTimeout(timer);}
+}
+async function requestRouteFromServers(coords,options=""){
+  const bases=[
+    "https://router.project-osrm.org/",
+    "https://routing.openstreetmap.de/routed-car/"
+  ];
+  for(const root of bases){
+    const routes=await requestOsrmRoutes(root+"route/v1/driving/"+coords,options,18000);
+    if(routes.length)return routes;
+  }
+  return [];
+}
+async function requestSnappedAvoidMotorway(from,waypoints,to){
+  const roots=["https://router.project-osrm.org/","https://routing.openstreetmap.de/routed-car/"];
+  const raw=[from,...waypoints,...[to]];
+  for(const root of roots){
+    const snapped=[];
+    let ok=true;
+    for(const r of raw){
+      const p=await requestOsrmNearest(root,r.latitude,r.longitude);
+      if(!p){ok=false;break;}
+      snapped.push(p[0]+","+p[1]);
+    }
+    if(!ok)continue;
+    const query="?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway";
+    const routes=await requestOsrmRoutes(root+"route/v1/driving/"+snapped.join(";"),query,22000);
+    const valid=routes.filter(route=>!routeHasForbiddenNationalMain(route));
+    if(valid.length)return {routes:valid,mode:"快速道路／平面道路混合"};
+  }
+  return {routes:[],mode:""};
+}
 async function analyzeRoute(){
   clearRouteMotorcycleAnimation();
   const from=findRouteRow($("#routeFrom")?.value),to=findRouteRow($("#routeTo")?.value),box=$("#routeResult");
   if(!from||!to){if(box){box.className="route-result";box.innerHTML="<strong>請先選擇起點與終點。</strong>"}return;}
   if(from.city===to.city&&from.town===to.town){if(box){box.className="route-result";box.innerHTML="<strong>起點與終點不能相同。</strong>"}return;}
-  const button=$("#analyzeRouteBtn");button.disabled=true;button.textContent="正在規劃路線與沿線天氣…";
+  const button=$("#analyzeRouteBtn");button.disabled=true;button.textContent="正在確認道路連通性與規劃路線…";
   try{
-    const base="https://router.project-osrm.org/route/v1/driving/";
     const direct=from.longitude+","+from.latitude+";"+to.longitude+","+to.latitude;
-    let routes=await requestOsrmRoutes(base+direct,"?overview=full&geometries=geojson&steps=true&alternatives=3&exclude=motorway");
-    let valid=routes.filter(route=>!routeHasForbiddenNationalMain(route));
+    // 第一階段：先確認「點到點確實存在可行車道路」。這一步不設高速公路限制，只做連通性證明。
+    const connected=await requestRouteFromServers(direct,"?overview=false&geometries=geojson&steps=true&alternatives=1");
+    if(!connected.length)throw new Error("起點與終點目前無法由路由服務建立道路連通；請稍後再試。");
+
+    // 第二階段：直接要求避開 motorway。若服務能直接找到，優先採用。
+    let valid=(await requestRouteFromServers(direct,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway"))
+      .filter(route=>!routeHasForbiddenNationalMain(route));
     let routingMode="快速道路優先";
-    // 若直接路線無結果，增加平面道路導引點；快速道路（trunk）仍可使用，但 motorway 會被排除。
+
+    // 第三階段：不要把「鄉鎮中心點」直接當成途經點；先用 nearest API 把導引點吸附到真正可行車道路，再重新規劃。
     if(!valid.length){
       const waypoints=buildDetourWaypoints(from,to);
-      if(waypoints.length){
-        const coords=[from,...waypoints,...[to]].map(r=>r.longitude+","+r.latitude).join(";");
-        const detour=await requestOsrmRoutes(base+coords,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false&exclude=motorway");
-        const detourValid=detour.filter(route=>!routeHasForbiddenNationalMain(route));
-        if(detourValid.length){routes=detourValid;valid=detourValid;routingMode="快速道路／平面道路混合";}
+      const snapped=await requestSnappedAvoidMotorway(from,waypoints,to);
+      if(snapped.routes.length){valid=snapped.routes;routingMode=snapped.mode;}
+    }
+
+    // 第四階段：逐一增加較少的導引點，避免過多 via 點把路線切斷。
+    if(!valid.length){
+      const waypoints=buildDetourWaypoints(from,to);
+      for(const count of [1,2,3]){
+        if(valid.length)break;
+        const selected=waypoints.slice(0,count);
+        const snapped=await requestSnappedAvoidMotorway(from,selected,to);
+        if(snapped.routes.length){valid=snapped.routes;routingMode=snapped.mode;}
       }
     }
-    // 最後一次：一般道路候選中只接受不含國道主線的路線，不再偷偷使用高速公路。
+
+    // 最後再確認一般道路候選：如果路由服務的 exclude graph 暫時異常，仍只接受經逐段道路檢查後不含國道主線的候選。
     if(!valid.length){
-      const general=await requestOsrmRoutes(base+direct,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false");
-      const nonNational=general.filter(route=>!routeHasForbiddenNationalMain(route));
-      if(nonNational.length){routes=nonNational;valid=nonNational;routingMode="平面道路備援";}
+      const general=(await requestRouteFromServers(direct,"?overview=full&geometries=geojson&steps=true&alternatives=3&continue_straight=false"))
+        .filter(route=>!routeHasForbiddenNationalMain(route));
+      if(general.length){valid=general;routingMode="平面道路備援";}
     }
-    if(!valid.length)throw new Error("目前的路由服務無法建立避開國道的完整道路路線；已嘗試快速道路與平面道路備援。");
+
+    if(!valid.length)throw new Error("已確認起點與終點之間存在道路，但目前可用路由服務沒有回傳符合「避開國道主線」條件的完整路線。請稍後再試。");
+
     routeCandidates=valid.map(route=>routeCandidateAnalysis(route)).filter(x=>x.coords.length>1).sort((a,b)=>a.route.duration-b.route.duration);
-    const fast=routeCandidates[0];if(!fast)throw new Error("目前找不到可用的道路路線。");
+    const fast=routeCandidates[0];if(!fast)throw new Error("路由服務有回應，但沒有可繪製的完整道路幾何。");
     const maxAllowed=fast.route.duration*1.15+600;
     const pool=routeCandidates.filter(x=>x.route.duration<=maxAllowed);
     const dry=pool.slice().sort((a,b)=>a.rainMetric-b.rainMetric||a.route.duration-b.route.duration)[0];
